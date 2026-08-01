@@ -1,0 +1,15 @@
+# 默认：自动识别文本，统一 LF 行尾
+* text=auto eol=lf
+
+# 源码与文档统一 LF
+*.py    text eol=lf
+*.rs    text eol=lf
+*.toml  text eol=lf
+*.md    text eol=lf
+
+# PowerShell 脚本在 Windows 下用 CRLF
+*.ps1   text eol=crlf
+
+# 二进制
+*.png   binary
+*.zip   binary
