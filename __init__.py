@@ -16,22 +16,27 @@ bl_info = {
 
 import bpy
 
+from . import properties
+
 
 def register():
     """
     注册插件。
 
-    当前阶段仅建立可被 Blender 识别的入口，子模块将随功能开发逐步接入。
+    流程: 属性组 → 操作符 → UI 面板（后两者随功能开发逐步接入）。
     """
     if getattr(register, "_lowpoly_registered", False):
         # Blender 在 reload 场景下可能重复调用，这里直接忽略
         return
+
+    properties.register()
 
     register._lowpoly_registered = True
 
 
 def unregister():
     """注销插件（幂等，可安全重复调用）"""
+    properties.unregister()
     register._lowpoly_registered = False
 
 
