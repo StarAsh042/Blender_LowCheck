@@ -18,28 +18,43 @@ import bpy
 
 from . import properties
 from . import operators
+from . import ui
+
+
+def _unregister_all():
+    """按依赖倒序注销各子模块，单个模块失败不影响其余模块"""
+    for unregister_fn in (ui.unregister, operators.unregister, properties.unregister):
+        try:
+            unregister_fn()
+        except Exception as exc:  # noqa: BLE001 - 注销必须尽可能完整执行
+            print(f"[LowpolyCheck] 注销 {unregister_fn.__module__} 失败: {exc}")
 
 
 def register():
     """
     注册插件。
 
-    流程: 属性组 → 操作符 → UI 面板（UI 随功能开发逐步接入）。
+    流程: 属性组 → 操作符 → UI 面板。
+    若中途失败则回滚已注册的部分并抛出异常，避免残留半注册状态。
     """
     if getattr(register, "_lowpoly_registered", False):
         # Blender 在 reload 场景下可能重复调用，这里直接忽略
         return
 
-    properties.register()
-    operators.register()
+    try:
+        properties.register()
+        operators.register()
+        ui.register()
+    except Exception:
+        _unregister_all()
+        raise
 
     register._lowpoly_registered = True
 
 
 def unregister():
     """注销插件（幂等，可安全重复调用）"""
-    operators.unregister()
-    properties.unregister()
+    _unregister_all()
     register._lowpoly_registered = False
 
 
