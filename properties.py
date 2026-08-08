@@ -9,14 +9,33 @@ import bpy
 class LowPolyProperties(bpy.types.PropertyGroup):
     """
     低模质量检查属性组
-    存储检测计数、运行选项与阈值参数
+    合并原有的错误检查和优化建议属性，存储所有检测计数和阈值
     """
+
+    # ── 顶点质量：计数 ──────────────────────────────────────────
+    collinear_vert_count: bpy.props.IntProperty(
+        name="共线顶点数",
+        default=0,
+        description="检测到的共线顶点数量"
+    )
 
     # ── 运行选项 ────────────────────────────────────────────────
     only_selected: bpy.props.BoolProperty(
         name="仅处理选中物体",
         description="勾选后只检测当前被选中的可见网格物体，适合在大场景中做局部检查",
         default=False
+    )
+
+    # ── 阈值设置 ────────────────────────────────────────────────
+    # 顶点质量阈值
+    collinear_threshold: bpy.props.FloatProperty(
+        name="共线阈值",
+        description="三点共线的角度阈值（弧度），越小越严格（默认 0.01）",
+        default=0.01,
+        min=0.0,
+        max=1.57,
+        precision=4,
+        step=0.01
     )
 
 

@@ -3,6 +3,7 @@
 提供各种辅助函数和检测算法
 """
 
+import bpy
 import bmesh
 import traceback
 from contextlib import contextmanager
@@ -325,3 +326,304 @@ def create_bmesh_copy(obj):
         BMesh: BMesh对象
     """
     return _build_bmesh(obj.data)
+
+
+def get_collinear_vertices(bm, threshold=0.01):
+    """
+    检测共线顶点（三点共线）
+
+    原理: 度数恰为 2 的内部顶点，若其两条相邻边几乎共线（方向相反），
+          则该顶点是直线上的多余点。
+
+    判据: 两条**单位**边向量的点积绝对值 ``|cos θ|`` 表示方向的对齐程度：
+          完全共线时 ``|cos θ| = 1``，偏离直线时随之减小。与
+          ``1 - threshold`` 比较，认为偏离不超过阈值弧度即为共线。
+
+    Args:
+        bm: BMesh对象
+        threshold: 允许偏离直线的最大角度（弧度），越小越严格
+
+    Returns:
+        list: 共线顶点的索引列表
+    """
+    if len(bm.verts) == 0:
+        return []
+
+    collinear_verts = []
+
+    for vert in bm.verts:
+        # 跳过边界顶点和度数不为2的顶点
+        if vert.is_boundary or len(vert.link_edges) != 2:
+            continue
+
+        # 获取两条边的向量
+        edges = list(vert.link_edges)
+        vec1 = edges[0].other_vert(vert).co - vert.co
+        vec2 = edges[1].other_vert(vert).co - vert.co
+
+        # 零长度边无法判断方向
+        if vec1.length < ZERO_THRESHOLD or vec2.length < ZERO_THRESHOLD:
+            continue
+
+        vec1.normalize()
+        vec2.normalize()
+
+        # 方向相反即共线：|cos θ| 越接近 1，越接近一条直线
+        if abs(vec1.dot(vec2)) > 1.0 - threshold:
+            collinear_verts.append(vert.index)
+
+    return collinear_verts
+
+
+def _vert_neighbors(vert):
+    """
+    返回与顶点通过边直接相连的邻居顶点集合。
+
+    Args:
+        vert: BMesh 顶点
+
+    Returns:
+        set: 邻居顶点集合
+    """
+    return {edge.other_vert(vert) for edge in vert.link_edges}
+
+
+# ---------------------------------------------------------------------------
+# 元素选择与视图操作
+# ---------------------------------------------------------------------------
+
+
+_ELEMENT_COLLECTIONS = {
+    'VERT': 'vertices',
+    'EDGE': 'edges',
+    'FACE': 'polygons',
+}
+
+
+_SELECT_MODE_FLAGS = {
+    'VERT': (True, False, False),
+    'EDGE': (False, True, False),
+    'FACE': (False, False, True),
+}
+
+
+def can_use_view_ops(context):
+    """
+    判断当前上下文是否允许安全调用依赖窗口的 bpy.ops。
+
+    后台模式（``blender --background``）下 ``context.window`` 为 None，
+    此时调用 ``bpy.ops.object.mode_set`` 等会直接抛出 RuntimeError。
+
+    Args:
+        context: Blender 上下文对象
+
+    Returns:
+        bool: 是否具备窗口上下文
+    """
+    return getattr(context, "window", None) is not None
+
+
+def ensure_object_mode(context):
+    """
+    安全地切换到物体模式（失败时不抛异常）。
+
+    Args:
+        context: Blender 上下文对象
+
+    Returns:
+        bool: 当前是否处于物体模式
+    """
+    if getattr(context, "mode", None) == 'OBJECT':
+        return True
+    if not can_use_view_ops(context):
+        return False
+    try:
+        bpy.ops.object.mode_set(mode='OBJECT')
+    except (RuntimeError, TypeError, AttributeError):
+        return False
+    return getattr(context, "mode", None) == 'OBJECT'
+
+
+def deselect_all_objects(context):
+    """
+    取消选择所有物体并切换到物体模式（异常安全）
+
+    Args:
+        context: Blender上下文对象
+    """
+    ensure_object_mode(context)
+    if not can_use_view_ops(context):
+        return
+    try:
+        bpy.ops.object.select_all(action='DESELECT')
+    except (RuntimeError, TypeError):
+        pass
+
+
+def _clear_mesh_selection(mesh, element_type):
+    """清除网格上指定类型元素的全部选择标志"""
+    collection = getattr(mesh, _ELEMENT_COLLECTIONS[element_type], None)
+    if collection is None:
+        return
+    for element in collection:
+        element.select = False
+
+
+def _apply_mesh_selection(obj, element_type, indices):
+    """
+    直接在网格数据上写入选择标志。
+
+    相比旧的 ``bm.to_mesh(obj.data)`` 往返写法，本方式：
+      * 不重建网格数据（更安全，不会丢失自定义数据层）
+      * 无需构建 BMesh（多物体批量选择时速度提升明显）
+
+    Args:
+        obj: 网格对象
+        element_type: 元素类型 ('VERT' / 'EDGE' / 'FACE')
+        indices: 元素索引序列（越界索引会被忽略）
+
+    Returns:
+        int: 实际写入的选择标志数量
+    """
+    mesh = getattr(obj, "data", None)
+    if mesh is None or element_type not in _ELEMENT_COLLECTIONS:
+        return 0
+
+    _clear_mesh_selection(mesh, element_type)
+    collection = getattr(mesh, _ELEMENT_COLLECTIONS[element_type])
+    total = len(collection)
+
+    selected = 0
+    for idx in indices:
+        if 0 <= idx < total:
+            collection[idx].select = True
+            selected += 1
+
+    mesh.update()
+    return selected
+
+
+def _set_mesh_select_mode(context, element_type):
+    """切换编辑模式下的选择模式（VERT / EDGE / FACE）"""
+    flags = _SELECT_MODE_FLAGS.get(element_type)
+    if flags is None:
+        return
+    tool_settings = getattr(context, "tool_settings", None)
+    if tool_settings is not None:
+        try:
+            tool_settings.mesh_select_mode = flags
+        except (AttributeError, TypeError):
+            pass
+    try:
+        bpy.ops.mesh.select_mode(type=element_type)
+    except (RuntimeError, TypeError):
+        pass
+
+
+def _select_objects_only(context, objects):
+    """在物体模式下只选中给定物体，并将最后一个设为活动物体"""
+    if not can_use_view_ops(context):
+        return
+    try:
+        bpy.ops.object.select_all(action='DESELECT')
+    except (RuntimeError, TypeError):
+        pass
+
+    for obj in objects:
+        try:
+            obj.select_set(True)
+        except (RuntimeError, TypeError):
+            pass
+
+    try:
+        context.view_layer.objects.active = objects[-1]
+    except (RuntimeError, TypeError, AttributeError):
+        pass
+
+
+def apply_selection(context, element_data_dict, element_type, enter_edit_mode=True):
+    """
+    对多个物体应用元素选择（Blender 3.4 推荐做法）。
+
+    流程:
+      1. 过滤已被删除的物体（避免 ReferenceError 导致崩溃）
+      2. 在物体模式下直接写入网格选择标志（无 BMesh 往返）
+      3. 选中全部目标物体并进入编辑模式；Blender 2.8+ 支持多物体
+         同时编辑，因此用户可以在编辑模式下直接看到所有物体的选中结果
+
+    Args:
+        context: Blender 上下文对象
+        element_data_dict: 字典 {obj: [元素索引, ...]}
+        element_type: 元素类型 ('VERT' / 'EDGE' / 'FACE')
+        enter_edit_mode: 是否尝试进入编辑模式（后台模式会自动跳过）
+
+    Returns:
+        tuple: (有效物体数, 实际选中元素总数, 跳过的失效物体数)
+    """
+    alive_items = [
+        (obj, indices)
+        for obj, indices in element_data_dict.items()
+        if is_object_alive(obj)
+    ]
+    skipped = len(element_data_dict) - len(alive_items)
+    if not alive_items:
+        return 0, 0, skipped
+
+    ensure_object_mode(context)
+
+    total_selected = 0
+    objects = []
+    for obj, indices in alive_items:
+        total_selected += _apply_mesh_selection(obj, element_type, indices)
+        objects.append(obj)
+
+    _select_objects_only(context, objects)
+
+    if not enter_edit_mode or not can_use_view_ops(context):
+        return len(objects), total_selected, skipped
+
+    try:
+        context.view_layer.objects.active = objects[-1]
+        if getattr(context, "mode", None) != 'EDIT_MESH':
+            bpy.ops.object.mode_set(mode='EDIT')
+        _set_mesh_select_mode(context, element_type)
+    except (RuntimeError, TypeError, AttributeError) as exc:
+        # 进入编辑模式失败（例如物体被隐藏）不影响已写入的选择状态
+        log_exception("进入编辑模式失败，选择状态已写入物体模式数据", exc)
+
+    return len(objects), total_selected, skipped
+
+
+def select_elements_in_edit_mode(obj, element_type, element_indices):
+    """
+    选择单个物体的网格元素（保留旧接口，内部转调 apply_selection）
+
+    Args:
+        obj: 网格对象
+        element_type: 元素类型 ('VERT', 'EDGE', 'FACE')
+        element_indices: 元素索引列表
+    """
+    if obj is None or not element_indices:
+        return
+    apply_selection(bpy.context, {obj: list(element_indices)}, element_type)
+
+
+def select_elements_multi_object(element_data_dict, element_type):
+    """
+    选择多个物体上的网格元素（保留旧接口，内部转调 apply_selection）。
+
+    .. note::
+       旧实现会逐个物体执行 ``bm.to_mesh(obj.data)``，代价高且会
+       重建网格数据；新实现直接写入网格选择标志，并利用 Blender 2.8+
+       的多物体编辑能力一次性展示全部结果。
+
+    Args:
+        element_data_dict: 字典 {obj: [element_indices, ...], ...}
+        element_type: 元素类型 ('VERT', 'EDGE', 'FACE')
+
+    Returns:
+        tuple: (有效物体数, 实际选中元素总数, 跳过的失效物体数)
+    """
+    if not element_data_dict:
+        return 0, 0, 0
+    return apply_selection(bpy.context, element_data_dict, element_type)

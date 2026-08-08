@@ -1,9 +1,16 @@
 """
 UI面板模块
-定义插件的用户界面
+定义插件的用户界面 — 单面板四分组结构
 """
 
 import bpy
+
+def _draw_op_row(layout, check_op, select_op, count_text):
+    """绘制 检查 / 选择 按钮 + 数量标签"""
+    row = layout.row(align=True)
+    row.operator(check_op, text="检查")
+    row.operator(select_op, text="选择")
+    row.label(text=count_text)
 
 
 class LOWPOLY_PT_quality_panel(bpy.types.Panel):
@@ -31,6 +38,16 @@ class LOWPOLY_PT_quality_panel(bpy.types.Panel):
         box = layout.box()
         box.label(text="检测范围", icon='RESTRICT_SELECT_OFF')
         box.prop(props, "only_selected", toggle=True)
+
+        layout.separator()
+        layout.label(text="顶点质量", icon='VERTEXSEL')
+
+        box = layout.box()
+        box.label(text="共线顶点检查", icon='VERTEXSEL')
+        _draw_op_row(box, "LOWPOLY_OT_check_collinear_vertices", "LOWPOLY_OT_select_collinear_vertices", f"数量: {props.collinear_vert_count}")
+        row = box.row(align=True)
+        row.prop(props, "collinear_threshold")
+
 
 
 # ── 注册/注销 ──────────────────────────────────────────────────────────
