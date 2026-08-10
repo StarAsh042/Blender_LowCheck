@@ -40,6 +40,13 @@ class LOWPOLY_PT_quality_panel(bpy.types.Panel):
         box.prop(props, "only_selected", toggle=True)
 
         layout.separator()
+        layout.label(text="网格拓扑", icon='MESH_DATA')
+
+        box = layout.box()
+        box.label(text="N-gon面检查", icon='MESH_DATA')
+        _draw_op_row(box, "LOWPOLY_OT_check_ngon_faces", "LOWPOLY_OT_select_ngon_faces", f"数量: {props.ngon_count}")
+
+        layout.separator()
         layout.label(text="顶点质量", icon='VERTEXSEL')
 
         box = layout.box()

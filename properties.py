@@ -12,6 +12,13 @@ class LowPolyProperties(bpy.types.PropertyGroup):
     合并原有的错误检查和优化建议属性，存储所有检测计数和阈值
     """
 
+    # ── 网格拓扑：计数 ──────────────────────────────────────────
+    ngon_count: bpy.props.IntProperty(
+        name="N-gon面数",
+        default=0,
+        description="检测到的N-gon面数量"
+    )
+
     # ── 顶点质量：计数 ──────────────────────────────────────────
     collinear_vert_count: bpy.props.IntProperty(
         name="共线顶点数",

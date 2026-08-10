@@ -56,6 +56,17 @@ def _format_message(label, count):
     return f"找到 {count} 个{label}" if count > 0 else f"未找到{label}"
 
 
+def _do_check_ngon(context):
+    """执行 N-gon 检查，返回报告消息"""
+    props = context.scene.lowpoly
+    data, total = _collect_over_meshes(
+        context, lambda bm: [face.index for face in bm.faces if len(face.verts) > 4]
+    )
+    props.ngon_count = total
+    _store_result(check_results, 'ngon_faces', data, 'FACE')
+    return _format_message("N-gon面", total)
+
+
 def _do_check_collinear_vertices(context):
     """执行共线顶点检查，返回报告消息"""
     props = context.scene.lowpoly
@@ -66,6 +77,28 @@ def _do_check_collinear_vertices(context):
     props.collinear_vert_count = total
     _store_result(check_results, 'collinear_vertices', data, 'VERT')
     return _format_message("共线顶点", total)
+
+
+class LOWPOLY_OT_check_ngon_faces(bpy.types.Operator, LowPolyBaseOperator):
+    """检查N-gon面"""
+    bl_idname = "lowpoly.check_ngon_faces"
+    bl_label = "检查N-gon面"
+    bl_description = "检查多于4边的面"
+
+    def execute(self, context):
+        self.report({'INFO'}, _do_check_ngon(context))
+        return {'FINISHED'}
+
+
+class LOWPOLY_OT_select_ngon_faces(bpy.types.Operator, LowPolyBaseOperator):
+    """选择N-gon面"""
+    bl_options = {'REGISTER', 'UNDO'}
+    bl_idname = "lowpoly.select_ngon_faces"
+    bl_label = "选择N-gon面"
+    bl_description = "选择已检查出的N-gon面"
+
+    def execute(self, context):
+        return self._execute_sub_element_select(context, check_results, 'ngon_faces', 'FACE', 'N-gon面')
 
 
 class LOWPOLY_OT_check_collinear_vertices(bpy.types.Operator, LowPolyBaseOperator):
@@ -92,6 +125,8 @@ class LOWPOLY_OT_select_collinear_vertices(bpy.types.Operator, LowPolyBaseOperat
 
 # 检查操作符类列表
 classes = [
+    LOWPOLY_OT_check_ngon_faces,
+    LOWPOLY_OT_select_ngon_faces,
     LOWPOLY_OT_check_collinear_vertices,
     LOWPOLY_OT_select_collinear_vertices,
 ]
