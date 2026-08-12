@@ -328,6 +328,28 @@ def create_bmesh_copy(obj):
     return _build_bmesh(obj.data)
 
 
+def get_non_manifold_edges(bm):
+    """
+    检测非流形边
+
+    原理: 被 3 个及以上面共用的边是非流形边，会导致烘焙错误和导出异常。
+
+    Args:
+        bm: BMesh 对象
+
+    Returns:
+        list: 非流形边的索引列表
+    """
+    if len(bm.edges) == 0:
+        return []
+
+    non_manifold = []
+    for edge in bm.edges:
+        if len(edge.link_faces) >= 3:
+            non_manifold.append(edge.index)
+    return non_manifold
+
+
 def get_collinear_vertices(bm, threshold=0.01):
     """
     检测共线顶点（三点共线）

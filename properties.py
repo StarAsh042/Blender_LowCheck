@@ -18,6 +18,11 @@ class LowPolyProperties(bpy.types.PropertyGroup):
         default=0,
         description="检测到的N-gon面数量"
     )
+    non_manifold_edge_count: bpy.props.IntProperty(
+        name="非流形边数",
+        default=0,
+        description="检测到的非流形边数量（被3个及以上面共用）"
+    )
 
     # ── 顶点质量：计数 ──────────────────────────────────────────
     collinear_vert_count: bpy.props.IntProperty(

@@ -46,6 +46,10 @@ class LOWPOLY_PT_quality_panel(bpy.types.Panel):
         box.label(text="N-gon面检查", icon='MESH_DATA')
         _draw_op_row(box, "LOWPOLY_OT_check_ngon_faces", "LOWPOLY_OT_select_ngon_faces", f"数量: {props.ngon_count}")
 
+        box = layout.box()
+        box.label(text="非流形边检查", icon='EDGESEL')
+        _draw_op_row(box, "LOWPOLY_OT_check_non_manifold_edges", "LOWPOLY_OT_select_non_manifold_edges", f"数量: {props.non_manifold_edge_count}")
+
         layout.separator()
         layout.label(text="顶点质量", icon='VERTEXSEL')
 
