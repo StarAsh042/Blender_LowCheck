@@ -328,6 +328,181 @@ def create_bmesh_copy(obj):
     return _build_bmesh(obj.data)
 
 
+def _edge_loop_direction(face, edge):
+    """
+    返回面沿着共享边遍历时经过的顶点顺序。
+
+    Args:
+        face: BMesh 面
+        edge: 与该面相邻的边
+
+    Returns:
+        tuple | None: (起点, 终点)，若该面不含此边则返回 None
+    """
+    verts = face.verts
+    count = len(verts)
+    start, end = edge.verts
+    for i in range(count):
+        a = verts[i]
+        b = verts[(i + 1) % count]
+        if (a is start and b is end) or (a is end and b is start):
+            return a, b
+    return None
+
+
+def _faces_winding_consistent(face_a, face_b, edge):
+    """
+    判断两个共边面的绕序是否一致。
+
+    流形网格中，同一条边被两个面沿相反方向遍历；若两面沿相同方向
+    遍历该边，说明其中一个面的法线被翻转了。
+
+    Args:
+        face_a: 面 A
+        face_b: 面 B
+        edge: A、B 的共享边
+
+    Returns:
+        bool: 绕序是否一致（无法判断时返回 True，避免误报）
+    """
+    dir_a = _edge_loop_direction(face_a, edge)
+    dir_b = _edge_loop_direction(face_b, edge)
+    if dir_a is None or dir_b is None:
+        return True
+    return dir_a[0] is dir_b[1] and dir_a[1] is dir_b[0]
+
+
+def _signed_volume(faces, flip_set):
+    """
+    计算闭合面片集合的有向体积。
+
+    使用散度定理的离散形式：对每个面做扇形三角化，
+    V = Σ (v0 · (v1 × v2)) / 6。朝向一致且向外的网格结果为正值。
+
+    Args:
+        faces: 面列表
+        flip_set: 需要视为反向的面集合
+
+    Returns:
+        float: 有向体积
+    """
+    volume = 0.0
+    for face in faces:
+        verts = face.verts
+        count = len(verts)
+        if count < 3:
+            continue
+        origin = verts[0].co
+        sign = -1.0 if face in flip_set else 1.0
+        for i in range(1, count - 1):
+            volume += sign * origin.cross(verts[i].co).dot(verts[i + 1].co)
+    return volume / 6.0
+
+
+def get_wrong_normal_faces(bm):
+    """
+    检测法线方向错误（翻转）的面
+
+    原理:
+      1. **绕序一致性**：流形网格中，同一条边必须被其两个面沿相反方向
+         遍历。以面为单位做广度优先遍历，即可把一个连通分量的所有面
+         分成「与起点一致 / 与起点相反」两组，后者即被翻转的面。
+         该判据是纯粹拓扑的，不依赖法线朝向的统计假设。
+      2. **闭合体的全局朝向**：若连通分量闭合（每条边恰好被 2 个面共用），
+         用有向体积判断整体朝向；体积为负说明整体朝内，
+         此时应该报告「多数派」那一组。
+      3. 非闭合分量无法定义内外，退化为「面积较大的一组视为正确」。
+
+    相比旧实现（面积加权法线投票），本算法：
+      * 能稳定检出「单个/少数面被翻转」这类最常见的问题
+      * 不会被对称结构（如立方体、平面）的法线抵消所干扰
+      * 对凹陷结构不会误报
+
+    Args:
+        bm: BMesh对象
+
+    Returns:
+        list: 法线翻转的面索引列表（升序）
+    """
+    if len(bm.faces) == 0:
+        return []
+
+    wrong_faces = set()
+    visited = set()
+
+    for seed in bm.faces:
+        if seed in visited:
+            continue
+
+        # ── 广度优先遍历，标记每个面相对起点的翻转奇偶性 ──
+        parity = {seed: False}
+        component = [seed]
+        stack = [seed]
+        visited.add(seed)
+
+        while stack:
+            face = stack.pop()
+            for edge in face.edges:
+                # 非流形边（被 3 个及以上面共用）上「绕序一致」本身没有
+                # 明确含义，跳过以免产生误报（这类边另有专门检测项）
+                if len(edge.link_faces) != 2:
+                    continue
+                for neighbor in edge.link_faces:
+                    if neighbor is face or neighbor in visited:
+                        continue
+                    same = _faces_winding_consistent(face, neighbor, edge)
+                    parity[neighbor] = parity[face] if same else (not parity[face])
+                    visited.add(neighbor)
+                    component.append(neighbor)
+                    stack.append(neighbor)
+
+        group_a = [f for f in component if not parity[f]]
+        group_b = [f for f in component if parity[f]]
+
+        component_edges = {edge for face in component for edge in face.edges}
+        is_closed = all(len(edge.link_faces) == 2 for edge in component_edges)
+
+        if not group_b:
+            # 整个分量绕序自洽：只有闭合体才可能「整体朝内」
+            if is_closed:
+                volume = _signed_volume(component, set())
+                if volume < -EPSILON:
+                    wrong_faces.update(face.index for face in component)
+            continue
+
+        wrong_group = None
+        if is_closed:
+            # 假设 group_a 朝外，计算整体有向体积
+            volume = _signed_volume(component, set(group_b))
+            if volume < -EPSILON:
+                # 体积为负 → group_a 才是朝内的错误组
+                wrong_group = group_a
+            elif volume > EPSILON:
+                wrong_group = group_b
+            else:
+                # 体积接近 0（退化/零厚度），退回面积比较
+                is_closed = False
+
+        if wrong_group is None and not is_closed:
+            area_a = sum(face.calc_area() for face in group_a)
+            area_b = sum(face.calc_area() for face in group_b)
+            if area_b < area_a:
+                wrong_group = group_b
+            elif area_a < area_b:
+                wrong_group = group_a
+            elif len(group_b) < len(group_a):
+                wrong_group = group_b
+            elif len(group_a) < len(group_b):
+                wrong_group = group_a
+            # 完全对称（面积与面数都相同）时结果无意义，宁可不报
+        if wrong_group is None:
+            continue
+
+        wrong_faces.update(face.index for face in wrong_group)
+
+    return sorted(wrong_faces)
+
+
 def get_non_manifold_edges(bm):
     """
     检测非流形边

@@ -18,6 +18,11 @@ class LowPolyProperties(bpy.types.PropertyGroup):
         default=0,
         description="检测到的N-gon面数量"
     )
+    wrong_normal_count: bpy.props.IntProperty(
+        name="错误法线面数",
+        default=0,
+        description="检测到的法线朝内的面数量"
+    )
     non_manifold_edge_count: bpy.props.IntProperty(
         name="非流形边数",
         default=0,

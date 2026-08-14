@@ -47,6 +47,10 @@ class LOWPOLY_PT_quality_panel(bpy.types.Panel):
         _draw_op_row(box, "LOWPOLY_OT_check_ngon_faces", "LOWPOLY_OT_select_ngon_faces", f"数量: {props.ngon_count}")
 
         box = layout.box()
+        box.label(text="错误法线检查（朝内）", icon='NORMALS_FACE')
+        _draw_op_row(box, "LOWPOLY_OT_check_wrong_normals", "LOWPOLY_OT_select_wrong_normals", f"数量: {props.wrong_normal_count}")
+
+        box = layout.box()
         box.label(text="非流形边检查", icon='EDGESEL')
         _draw_op_row(box, "LOWPOLY_OT_check_non_manifold_edges", "LOWPOLY_OT_select_non_manifold_edges", f"数量: {props.non_manifold_edge_count}")
 
