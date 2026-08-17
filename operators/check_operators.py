@@ -67,6 +67,15 @@ def _do_check_ngon(context):
     return _format_message("N-gon面", total)
 
 
+def _do_check_overlapping_faces(context):
+    """执行重叠面检查，返回报告消息"""
+    props = context.scene.lowpoly
+    data, total = _collect_over_meshes(context, utils.get_faces_sharing_all_edges)
+    props.overlapping_face_count = total
+    _store_result(check_results, 'overlapping_faces', data, 'FACE')
+    return _format_message("重叠面", total)
+
+
 def _do_check_wrong_normals(context):
     """执行错误法线检查，返回报告消息"""
     props = context.scene.lowpoly
@@ -117,6 +126,28 @@ class LOWPOLY_OT_select_ngon_faces(bpy.types.Operator, LowPolyBaseOperator):
 
     def execute(self, context):
         return self._execute_sub_element_select(context, check_results, 'ngon_faces', 'FACE', 'N-gon面')
+
+
+class LOWPOLY_OT_check_overlapping_faces(bpy.types.Operator, LowPolyBaseOperator):
+    """检查重叠面"""
+    bl_idname = "lowpoly.check_overlapping_faces"
+    bl_label = "检查重叠面"
+    bl_description = "检查共用所有边的重叠面"
+
+    def execute(self, context):
+        self.report({'INFO'}, _do_check_overlapping_faces(context))
+        return {'FINISHED'}
+
+
+class LOWPOLY_OT_select_overlapping_faces(bpy.types.Operator, LowPolyBaseOperator):
+    """选择重叠面"""
+    bl_options = {'REGISTER', 'UNDO'}
+    bl_idname = "lowpoly.select_overlapping_faces"
+    bl_label = "选择重叠面"
+    bl_description = "选择已检查出的重叠面"
+
+    def execute(self, context):
+        return self._execute_sub_element_select(context, check_results, 'overlapping_faces', 'FACE', '重叠面')
 
 
 class LOWPOLY_OT_check_wrong_normals(bpy.types.Operator, LowPolyBaseOperator):
@@ -189,6 +220,8 @@ class LOWPOLY_OT_select_collinear_vertices(bpy.types.Operator, LowPolyBaseOperat
 classes = [
     LOWPOLY_OT_check_ngon_faces,
     LOWPOLY_OT_select_ngon_faces,
+    LOWPOLY_OT_check_overlapping_faces,
+    LOWPOLY_OT_select_overlapping_faces,
     LOWPOLY_OT_check_wrong_normals,
     LOWPOLY_OT_select_wrong_normals,
     LOWPOLY_OT_check_non_manifold_edges,

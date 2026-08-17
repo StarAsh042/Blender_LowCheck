@@ -328,6 +328,44 @@ def create_bmesh_copy(obj):
     return _build_bmesh(obj.data)
 
 
+def get_faces_sharing_all_edges(bm, threshold=0.0001):
+    """
+    检测重叠面（位置重合的面）
+
+    原理: 把每个顶点坐标按 ``threshold`` 量化到整数网格后取整做键，
+          再以「面的顶点量化键集合」作为面的键；键相同的面即顶点位置
+          完全重合。
+
+    Args:
+        bm: BMesh对象
+        threshold: 顶点位置比较的阈值（<= 0 时直接返回空结果）
+
+    Returns:
+        list: 重叠面的索引列表
+    """
+    if len(bm.faces) == 0 or threshold <= 0.0:
+        return []
+
+    def quantize(co):
+        return (
+            int(round(co.x / threshold)),
+            int(round(co.y / threshold)),
+            int(round(co.z / threshold)),
+        )
+
+    face_keys = {}
+    for face in bm.faces:
+        key = tuple(sorted(quantize(vert.co) for vert in face.verts))
+        face_keys.setdefault(key, []).append(face.index)
+
+    overlapping_faces = []
+    for face_indices in face_keys.values():
+        if len(face_indices) > 1:
+            overlapping_faces.extend(face_indices)
+
+    return overlapping_faces
+
+
 def _edge_loop_direction(face, edge):
     """
     返回面沿着共享边遍历时经过的顶点顺序。

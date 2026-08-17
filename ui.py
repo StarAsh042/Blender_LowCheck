@@ -47,6 +47,10 @@ class LOWPOLY_PT_quality_panel(bpy.types.Panel):
         _draw_op_row(box, "LOWPOLY_OT_check_ngon_faces", "LOWPOLY_OT_select_ngon_faces", f"数量: {props.ngon_count}")
 
         box = layout.box()
+        box.label(text="重叠面检查", icon='FACESEL')
+        _draw_op_row(box, "LOWPOLY_OT_check_overlapping_faces", "LOWPOLY_OT_select_overlapping_faces", f"数量: {props.overlapping_face_count}")
+
+        box = layout.box()
         box.label(text="错误法线检查（朝内）", icon='NORMALS_FACE')
         _draw_op_row(box, "LOWPOLY_OT_check_wrong_normals", "LOWPOLY_OT_select_wrong_normals", f"数量: {props.wrong_normal_count}")
 

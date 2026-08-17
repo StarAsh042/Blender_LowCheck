@@ -18,6 +18,11 @@ class LowPolyProperties(bpy.types.PropertyGroup):
         default=0,
         description="检测到的N-gon面数量"
     )
+    overlapping_face_count: bpy.props.IntProperty(
+        name="重叠面数",
+        default=0,
+        description="检测到的重叠面数量"
+    )
     wrong_normal_count: bpy.props.IntProperty(
         name="错误法线面数",
         default=0,
