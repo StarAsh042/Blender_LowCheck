@@ -58,6 +58,10 @@ class LOWPOLY_PT_quality_panel(bpy.types.Panel):
         box.label(text="非流形边检查", icon='EDGESEL')
         _draw_op_row(box, "LOWPOLY_OT_check_non_manifold_edges", "LOWPOLY_OT_select_non_manifold_edges", f"数量: {props.non_manifold_edge_count}")
 
+        box = layout.box()
+        box.label(text="孤立几何体检查", icon='OUTLINER_OB_MESH')
+        _draw_op_row(box, "LOWPOLY_OT_check_loose_geometry", "LOWPOLY_OT_select_loose_geometry", f"悬浮顶点: {props.loose_vert_count} 悬浮边: {props.loose_edge_count}")
+
         layout.separator()
         layout.label(text="顶点质量", icon='VERTEXSEL')
 

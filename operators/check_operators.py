@@ -94,6 +94,35 @@ def _do_check_non_manifold_edges(context):
     return _format_message("非流形边", total)
 
 
+def _do_check_loose_geometry(context):
+    """执行孤立几何体检查（悬浮顶点 + 悬浮边），返回报告消息"""
+    props = context.scene.lowpoly
+
+    data = {}
+    total_verts = 0
+    total_edges = 0
+
+    for obj in utils.get_target_mesh_objects(context):
+        with utils.bmesh_from_object(obj) as bm:
+            loose_verts, loose_edges = utils.get_loose_geometry(bm)
+            if loose_verts or loose_edges:
+                data[obj] = loose_verts
+                total_verts += len(loose_verts)
+                total_edges += len(loose_edges)
+
+    props.loose_vert_count = total_verts
+    props.loose_edge_count = total_edges
+
+    _store_result(check_results, 'loose_geometry', data, 'VERT')
+
+    parts = []
+    if total_verts > 0:
+        parts.append(f"{total_verts} 个悬浮顶点")
+    if total_edges > 0:
+        parts.append(f"{total_edges} 条悬浮边")
+    return "找到 " + "、".join(parts) if parts else "未找到孤立几何体"
+
+
 def _do_check_collinear_vertices(context):
     """执行共线顶点检查，返回报告消息"""
     props = context.scene.lowpoly
@@ -194,6 +223,28 @@ class LOWPOLY_OT_select_non_manifold_edges(bpy.types.Operator, LowPolyBaseOperat
         return self._execute_sub_element_select(context, check_results, 'non_manifold_edges', 'EDGE', '非流形边')
 
 
+class LOWPOLY_OT_check_loose_geometry(bpy.types.Operator, LowPolyBaseOperator):
+    """检查孤立几何体"""
+    bl_idname = "lowpoly.check_loose_geometry"
+    bl_label = "检查孤立几何体"
+    bl_description = "检测悬浮顶点和悬浮边（不属于任何面的几何体）"
+
+    def execute(self, context):
+        self.report({'INFO'}, _do_check_loose_geometry(context))
+        return {'FINISHED'}
+
+
+class LOWPOLY_OT_select_loose_geometry(bpy.types.Operator, LowPolyBaseOperator):
+    """选择孤立几何体"""
+    bl_options = {'REGISTER', 'UNDO'}
+    bl_idname = "lowpoly.select_loose_geometry"
+    bl_label = "选择孤立几何体"
+    bl_description = "选择已检测出的悬浮顶点"
+
+    def execute(self, context):
+        return self._execute_sub_element_select(context, check_results, 'loose_geometry', 'VERT', '孤立几何体')
+
+
 class LOWPOLY_OT_check_collinear_vertices(bpy.types.Operator, LowPolyBaseOperator):
     """检查共线顶点"""
     bl_idname = "lowpoly.check_collinear_vertices"
@@ -226,6 +277,8 @@ classes = [
     LOWPOLY_OT_select_wrong_normals,
     LOWPOLY_OT_check_non_manifold_edges,
     LOWPOLY_OT_select_non_manifold_edges,
+    LOWPOLY_OT_check_loose_geometry,
+    LOWPOLY_OT_select_loose_geometry,
     LOWPOLY_OT_check_collinear_vertices,
     LOWPOLY_OT_select_collinear_vertices,
 ]

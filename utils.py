@@ -563,6 +563,33 @@ def get_non_manifold_edges(bm):
     return non_manifold
 
 
+def get_loose_geometry(bm):
+    """
+    检测孤立几何体（悬浮顶点和悬浮边）
+
+    原理: 不属于任何面的顶点和边是建模残留垃圾，
+          影响导出文件大小和引擎导入效率。
+
+    Args:
+        bm: BMesh 对象
+
+    Returns:
+        tuple: (loose_vert_indices, loose_edge_indices)
+    """
+    loose_verts = []
+    loose_edges = []
+
+    for vert in bm.verts:
+        if not vert.link_faces:
+            loose_verts.append(vert.index)
+
+    for edge in bm.edges:
+        if not edge.link_faces:
+            loose_edges.append(edge.index)
+
+    return loose_verts, loose_edges
+
+
 def get_collinear_vertices(bm, threshold=0.01):
     """
     检测共线顶点（三点共线）

@@ -33,6 +33,16 @@ class LowPolyProperties(bpy.types.PropertyGroup):
         default=0,
         description="检测到的非流形边数量（被3个及以上面共用）"
     )
+    loose_vert_count: bpy.props.IntProperty(
+        name="孤立顶点数",
+        default=0,
+        description="不属于任何面的悬浮顶点数量"
+    )
+    loose_edge_count: bpy.props.IntProperty(
+        name="孤立边数",
+        default=0,
+        description="不属于任何面的悬浮边数量"
+    )
 
     # ── 顶点质量：计数 ──────────────────────────────────────────
     collinear_vert_count: bpy.props.IntProperty(
