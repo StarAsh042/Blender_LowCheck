@@ -45,6 +45,11 @@ class LowPolyProperties(bpy.types.PropertyGroup):
     )
 
     # ── 顶点质量：计数 ──────────────────────────────────────────
+    unwelded_vert_count: bpy.props.IntProperty(
+        name="未焊接点数",
+        default=0,
+        description="检测到的未焊接点数量"
+    )
     collinear_vert_count: bpy.props.IntProperty(
         name="共线顶点数",
         default=0,
@@ -68,6 +73,14 @@ class LowPolyProperties(bpy.types.PropertyGroup):
         max=1.57,
         precision=4,
         step=0.01
+    )
+    unwelded_threshold: bpy.props.FloatProperty(
+        name="未焊接阈值",
+        description="判断顶点未焊接的距离阈值，两点距离小于该值且无边相连即视为未焊接（默认 0.001）",
+        default=0.001,
+        min=0.0,
+        precision=6,
+        step=0.1
     )
 
 

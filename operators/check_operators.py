@@ -123,6 +123,18 @@ def _do_check_loose_geometry(context):
     return "找到 " + "、".join(parts) if parts else "未找到孤立几何体"
 
 
+def _do_check_unwelded_vertices(context):
+    """执行未焊接点检查，返回报告消息"""
+    props = context.scene.lowpoly
+    threshold = props.unwelded_threshold
+    data, total = _collect_over_meshes(
+        context, lambda bm: utils.get_unwelded_vertices(bm, threshold)
+    )
+    props.unwelded_vert_count = total
+    _store_result(check_results, 'unwelded_vertices', data, 'VERT')
+    return _format_message("未焊接点", total)
+
+
 def _do_check_collinear_vertices(context):
     """执行共线顶点检查，返回报告消息"""
     props = context.scene.lowpoly
@@ -245,6 +257,28 @@ class LOWPOLY_OT_select_loose_geometry(bpy.types.Operator, LowPolyBaseOperator):
         return self._execute_sub_element_select(context, check_results, 'loose_geometry', 'VERT', '孤立几何体')
 
 
+class LOWPOLY_OT_check_unwelded_vertices(bpy.types.Operator, LowPolyBaseOperator):
+    """检查未焊接点"""
+    bl_idname = "lowpoly.check_unwelded_vertices"
+    bl_label = "检查未焊接点"
+    bl_description = "检查相同位置下未焊接的点"
+
+    def execute(self, context):
+        self.report({'INFO'}, _do_check_unwelded_vertices(context))
+        return {'FINISHED'}
+
+
+class LOWPOLY_OT_select_unwelded_vertices(bpy.types.Operator, LowPolyBaseOperator):
+    """选择未焊接点"""
+    bl_options = {'REGISTER', 'UNDO'}
+    bl_idname = "lowpoly.select_unwelded_vertices"
+    bl_label = "选择未焊接点"
+    bl_description = "选择已检查出的未焊接点"
+
+    def execute(self, context):
+        return self._execute_sub_element_select(context, check_results, 'unwelded_vertices', 'VERT', '未焊接点')
+
+
 class LOWPOLY_OT_check_collinear_vertices(bpy.types.Operator, LowPolyBaseOperator):
     """检查共线顶点"""
     bl_idname = "lowpoly.check_collinear_vertices"
@@ -279,6 +313,8 @@ classes = [
     LOWPOLY_OT_select_non_manifold_edges,
     LOWPOLY_OT_check_loose_geometry,
     LOWPOLY_OT_select_loose_geometry,
+    LOWPOLY_OT_check_unwelded_vertices,
+    LOWPOLY_OT_select_unwelded_vertices,
     LOWPOLY_OT_check_collinear_vertices,
     LOWPOLY_OT_select_collinear_vertices,
 ]

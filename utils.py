@@ -590,6 +590,54 @@ def get_loose_geometry(bm):
     return loose_verts, loose_edges
 
 
+def get_unwelded_vertices(bm, threshold=0.001):
+    """
+    检测未焊接的顶点（空间位置重合但没有被边连接）
+
+    原理: 把顶点坐标按 ``threshold`` 量化到整数网格后分桶，同一桶内的
+          顶点两两比较距离；距离小于阈值且二者之间不存在边时，视为
+          「未焊接」的重合点。
+
+    Args:
+        bm: BMesh对象
+        threshold: 距离阈值（必须大于 0，否则直接返回空结果）
+
+    Returns:
+        list: 未焊接顶点的索引列表（升序、去重）
+    """
+    if len(bm.verts) == 0 or threshold <= 0.0:
+        return []
+
+    def quantize(co):
+        return (
+            int(round(co.x / threshold)),
+            int(round(co.y / threshold)),
+            int(round(co.z / threshold)),
+        )
+
+    buckets = {}
+    for vert in bm.verts:
+        buckets.setdefault(quantize(vert.co), []).append(vert)
+
+    unwelded = set()
+    for group in buckets.values():
+        if len(group) < 2:
+            continue
+        for i, vert in enumerate(group):
+            neighbors = None
+            for other in group[i + 1:]:
+                if (other.co - vert.co).length >= threshold:
+                    continue
+                if neighbors is None:
+                    neighbors = _vert_neighbors(vert)
+                if other in neighbors:
+                    continue
+                unwelded.add(vert.index)
+                unwelded.add(other.index)
+
+    return sorted(unwelded)
+
+
 def get_collinear_vertices(bm, threshold=0.01):
     """
     检测共线顶点（三点共线）

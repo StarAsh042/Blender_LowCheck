@@ -66,6 +66,12 @@ class LOWPOLY_PT_quality_panel(bpy.types.Panel):
         layout.label(text="顶点质量", icon='VERTEXSEL')
 
         box = layout.box()
+        box.label(text="未焊接点检查", icon='VERTEXSEL')
+        _draw_op_row(box, "LOWPOLY_OT_check_unwelded_vertices", "LOWPOLY_OT_select_unwelded_vertices", f"数量: {props.unwelded_vert_count}")
+        row = box.row(align=True)
+        row.prop(props, "unwelded_threshold")
+
+        box = layout.box()
         box.label(text="共线顶点检查", icon='VERTEXSEL')
         _draw_op_row(box, "LOWPOLY_OT_check_collinear_vertices", "LOWPOLY_OT_select_collinear_vertices", f"数量: {props.collinear_vert_count}")
         row = box.row(align=True)
