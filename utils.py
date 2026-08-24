@@ -7,6 +7,7 @@ import bpy
 import bmesh
 import traceback
 from contextlib import contextmanager
+from mathutils.kdtree import KDTree
 
 
 # ---------------------------------------------------------------------------
@@ -696,6 +697,42 @@ def _vert_neighbors(vert):
         set: 邻居顶点集合
     """
     return {edge.other_vert(vert) for edge in vert.link_edges}
+
+
+def get_dense_vertices(bm, distance_threshold=0.1, count_threshold=5):
+    """
+    检测密集顶点
+
+    原理: 使用KDTree加速空间搜索，查找局部顶点密度过高的区域
+
+    Args:
+        bm: BMesh对象
+        distance_threshold: 搜索半径
+        count_threshold: 顶点数量阈值
+
+    Returns:
+        list: 密集顶点的索引列表
+    """
+    if len(bm.verts) == 0:
+        return []
+
+    dense_verts = []
+
+    # 构建KDTree用于快速空间查询
+    kd = KDTree(len(bm.verts))
+
+    for i, vert in enumerate(bm.verts):
+        kd.insert(vert.co, i)
+    kd.balance()
+
+    # 查找每个顶点附近的邻居
+    for i, vert in enumerate(bm.verts):
+        nearby = kd.find_range(vert.co, distance_threshold)
+        # 附近顶点数量超过阈值（包括自己）
+        if len(nearby) >= count_threshold + 1:
+            dense_verts.append(vert.index)
+
+    return dense_verts
 
 
 # ---------------------------------------------------------------------------

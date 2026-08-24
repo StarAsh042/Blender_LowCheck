@@ -22,7 +22,7 @@ from . import utils
 from . import properties
 from . import operators
 from . import ui
-from .operators import check_operators
+from .operators import check_operators, optimize_operators
 
 
 @bpy.app.handlers.persistent

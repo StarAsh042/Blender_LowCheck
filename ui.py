@@ -77,6 +77,14 @@ class LOWPOLY_PT_quality_panel(bpy.types.Panel):
         row = box.row(align=True)
         row.prop(props, "collinear_threshold")
 
+        box = layout.box()
+        box.label(text="密集顶点检测", icon='VERTEXSEL')
+        _draw_op_row(box, "LOWPOLY_OT_suggest_dense_vertices", "LOWPOLY_OT_select_dense_vertices", f"数量: {props.dense_vert_count}")
+        row = box.row(align=True)
+        row.prop(props, "dense_distance_threshold")
+        row = box.row(align=True)
+        row.prop(props, "dense_count_threshold")
+
 
 
 # ── 注册/注销 ──────────────────────────────────────────────────────────

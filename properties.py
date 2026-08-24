@@ -55,6 +55,11 @@ class LowPolyProperties(bpy.types.PropertyGroup):
         default=0,
         description="检测到的共线顶点数量"
     )
+    dense_vert_count: bpy.props.IntProperty(
+        name="密集顶点数",
+        default=0,
+        description="检测到的密集顶点数量"
+    )
 
     # ── 运行选项 ────────────────────────────────────────────────
     only_selected: bpy.props.BoolProperty(
@@ -81,6 +86,21 @@ class LowPolyProperties(bpy.types.PropertyGroup):
         min=0.0,
         precision=6,
         step=0.1
+    )
+    dense_distance_threshold: bpy.props.FloatProperty(
+        name="密集距离阈值",
+        description="判断顶点密集的搜索半径（默认 0.1）",
+        default=0.1,
+        min=0.0,
+        precision=4,
+        step=0.1
+    )
+    dense_count_threshold: bpy.props.IntProperty(
+        name="密集数量阈值",
+        description="半径内顶点数量达到该值即视为密集（默认 5）",
+        default=5,
+        min=2,
+        max=100
     )
 
 
