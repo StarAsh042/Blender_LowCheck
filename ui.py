@@ -85,6 +85,17 @@ class LOWPOLY_PT_quality_panel(bpy.types.Panel):
         row = box.row(align=True)
         row.prop(props, "dense_count_threshold")
 
+        layout.separator()
+        layout.label(text="面质量", icon='FACESEL')
+
+        box = layout.box()
+        box.label(text="退化几何体检查", icon='MESH_DATA')
+        _draw_op_row(box, "LOWPOLY_OT_check_degenerate_geometry", "LOWPOLY_OT_select_degenerate_geometry", f"退化边: {props.degenerate_edge_count} 退化面: {props.degenerate_face_count}")
+        row = box.row(align=True)
+        row.prop(props, "degenerate_edge_threshold")
+        row = box.row(align=True)
+        row.prop(props, "degenerate_face_threshold")
+
 
 
 # ── 注册/注销 ──────────────────────────────────────────────────────────

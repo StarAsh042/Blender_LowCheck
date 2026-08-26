@@ -61,6 +61,18 @@ class LowPolyProperties(bpy.types.PropertyGroup):
         description="检测到的密集顶点数量"
     )
 
+    # ── 面质量：计数 ──────────────────────────────────────────
+    degenerate_edge_count: bpy.props.IntProperty(
+        name="退化边数",
+        default=0,
+        description="检测到的零长度边数量"
+    )
+    degenerate_face_count: bpy.props.IntProperty(
+        name="退化面数",
+        default=0,
+        description="检测到的零面积面数量"
+    )
+
     # ── 运行选项 ────────────────────────────────────────────────
     only_selected: bpy.props.BoolProperty(
         name="仅处理选中物体",
@@ -69,6 +81,23 @@ class LowPolyProperties(bpy.types.PropertyGroup):
     )
 
     # ── 阈值设置 ────────────────────────────────────────────────
+    # 面质量阈值
+    degenerate_edge_threshold: bpy.props.FloatProperty(
+        name="退化边阈值",
+        description="判断零长度边的阈值，边长小于该值视为退化边（默认 0.0001）",
+        default=0.0001,
+        min=0.0,
+        precision=8,
+        step=0.01
+    )
+    degenerate_face_threshold: bpy.props.FloatProperty(
+        name="退化面阈值",
+        description="判断零面积面的阈值，面积小于该值视为退化面（默认 0.0001）",
+        default=0.0001,
+        min=0.0,
+        precision=8,
+        step=0.01
+    )
     # 顶点质量阈值
     collinear_threshold: bpy.props.FloatProperty(
         name="共线阈值",

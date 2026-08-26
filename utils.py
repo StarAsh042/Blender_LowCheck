@@ -735,6 +735,48 @@ def get_dense_vertices(bm, distance_threshold=0.1, count_threshold=5):
     return dense_verts
 
 
+def get_zero_length_edges(bm, threshold=0.0001):
+    """
+    检测零长度边
+
+    Args:
+        bm: BMesh对象
+        threshold: 长度阈值
+
+    Returns:
+        list: 零长度边的索引列表
+    """
+    if len(bm.edges) == 0:
+        return []
+
+    zero_edges = []
+    for edge in bm.edges:
+        if edge.calc_length() < threshold:
+            zero_edges.append(edge.index)
+    return zero_edges
+
+
+def get_zero_area_faces(bm, threshold=0.0001):
+    """
+    检测零面积面
+
+    Args:
+        bm: BMesh对象
+        threshold: 面积阈值
+
+    Returns:
+        list: 零面积面的索引列表
+    """
+    if len(bm.faces) == 0:
+        return []
+
+    zero_faces = []
+    for face in bm.faces:
+        if face.calc_area() < threshold:
+            zero_faces.append(face.index)
+    return zero_faces
+
+
 # ---------------------------------------------------------------------------
 # 元素选择与视图操作
 # ---------------------------------------------------------------------------

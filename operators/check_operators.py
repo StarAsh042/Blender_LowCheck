@@ -147,6 +147,41 @@ def _do_check_collinear_vertices(context):
     return _format_message("共线顶点", total)
 
 
+def _do_check_degenerate_geometry(context):
+    """执行退化几何体检查（零长度边 + 零面积面），返回报告消息"""
+    props = context.scene.lowpoly
+    edge_threshold = props.degenerate_edge_threshold
+    face_threshold = props.degenerate_face_threshold
+
+    edge_data = {}
+    face_data = {}
+    total_edges = 0
+    total_faces = 0
+
+    for obj in utils.get_target_mesh_objects(context):
+        with utils.bmesh_from_object(obj) as bm:
+            zero_edges = utils.get_zero_length_edges(bm, edge_threshold)
+            zero_faces = utils.get_zero_area_faces(bm, face_threshold)
+            if zero_edges:
+                edge_data[obj] = zero_edges
+                total_edges += len(zero_edges)
+            if zero_faces:
+                face_data[obj] = zero_faces
+                total_faces += len(zero_faces)
+
+    props.degenerate_edge_count = total_edges
+    props.degenerate_face_count = total_faces
+
+    _store_result(check_results, 'degenerate_geometry', edge_data or face_data, 'EDGE')
+
+    parts = []
+    if total_edges > 0:
+        parts.append(f"{total_edges} 条退化边")
+    if total_faces > 0:
+        parts.append(f"{total_faces} 个退化面")
+    return "找到 " + "、".join(parts) if parts else "未找到退化几何体"
+
+
 class LOWPOLY_OT_check_ngon_faces(bpy.types.Operator, LowPolyBaseOperator):
     """检查N-gon面"""
     bl_idname = "lowpoly.check_ngon_faces"
@@ -301,6 +336,28 @@ class LOWPOLY_OT_select_collinear_vertices(bpy.types.Operator, LowPolyBaseOperat
         return self._execute_sub_element_select(context, check_results, 'collinear_vertices', 'VERT', '共线顶点')
 
 
+class LOWPOLY_OT_check_degenerate_geometry(bpy.types.Operator, LowPolyBaseOperator):
+    """检查退化几何体（零长度边 + 零面积面）"""
+    bl_idname = "lowpoly.check_degenerate_geometry"
+    bl_label = "检查退化几何体"
+    bl_description = "检测零长度边和零面积面"
+
+    def execute(self, context):
+        self.report({'INFO'}, _do_check_degenerate_geometry(context))
+        return {'FINISHED'}
+
+
+class LOWPOLY_OT_select_degenerate_geometry(bpy.types.Operator, LowPolyBaseOperator):
+    """选择退化几何体"""
+    bl_options = {'REGISTER', 'UNDO'}
+    bl_idname = "lowpoly.select_degenerate_geometry"
+    bl_label = "选择退化几何体"
+    bl_description = "选择已检测出的退化边；若没有退化边则选择退化面"
+
+    def execute(self, context):
+        return self._execute_sub_element_select(context, check_results, 'degenerate_geometry', 'EDGE', '退化几何体')
+
+
 # 检查操作符类列表
 classes = [
     LOWPOLY_OT_check_ngon_faces,
@@ -317,6 +374,8 @@ classes = [
     LOWPOLY_OT_select_unwelded_vertices,
     LOWPOLY_OT_check_collinear_vertices,
     LOWPOLY_OT_select_collinear_vertices,
+    LOWPOLY_OT_check_degenerate_geometry,
+    LOWPOLY_OT_select_degenerate_geometry,
 ]
 
 
