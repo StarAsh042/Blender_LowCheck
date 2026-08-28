@@ -96,6 +96,12 @@ class LOWPOLY_PT_quality_panel(bpy.types.Panel):
         row = box.row(align=True)
         row.prop(props, "degenerate_face_threshold")
 
+        box = layout.box()
+        box.label(text="非平面四边面检查", icon='MESH_DATA')
+        _draw_op_row(box, "LOWPOLY_OT_check_distorted_quads", "LOWPOLY_OT_select_distorted_quads", f"数量: {props.distorted_quad_count}")
+        row = box.row(align=True)
+        row.prop(props, "distortion_threshold")
+
 
 
 # ── 注册/注销 ──────────────────────────────────────────────────────────

@@ -182,6 +182,24 @@ def _do_check_degenerate_geometry(context):
     return "找到 " + "、".join(parts) if parts else "未找到退化几何体"
 
 
+def _do_check_distorted_quads(context):
+    """执行非平面四边面检查，返回报告消息"""
+    props = context.scene.lowpoly
+    threshold = props.distortion_threshold
+
+    def extract(bm):
+        return [
+            face.index
+            for face in bm.faces
+            if len(face.verts) == 4 and utils.calculate_face_planarity(face) > threshold
+        ]
+
+    data, total = _collect_over_meshes(context, extract)
+    props.distorted_quad_count = total
+    _store_result(check_results, 'distorted_quads', data, 'FACE')
+    return _format_message("非平面四边面", total)
+
+
 class LOWPOLY_OT_check_ngon_faces(bpy.types.Operator, LowPolyBaseOperator):
     """检查N-gon面"""
     bl_idname = "lowpoly.check_ngon_faces"
@@ -358,6 +376,28 @@ class LOWPOLY_OT_select_degenerate_geometry(bpy.types.Operator, LowPolyBaseOpera
         return self._execute_sub_element_select(context, check_results, 'degenerate_geometry', 'EDGE', '退化几何体')
 
 
+class LOWPOLY_OT_check_distorted_quads(bpy.types.Operator, LowPolyBaseOperator):
+    """检查非平面四边面（扭曲四边面）"""
+    bl_idname = "lowpoly.check_distorted_quads"
+    bl_label = "检查非平面四边面"
+    bl_description = "检查不共面的四边面（扭曲四边面）"
+
+    def execute(self, context):
+        self.report({'INFO'}, _do_check_distorted_quads(context))
+        return {'FINISHED'}
+
+
+class LOWPOLY_OT_select_distorted_quads(bpy.types.Operator, LowPolyBaseOperator):
+    """选择非平面四边面"""
+    bl_options = {'REGISTER', 'UNDO'}
+    bl_idname = "lowpoly.select_distorted_quads"
+    bl_label = "选择非平面四边面"
+    bl_description = "选择已检查出的非平面四边面"
+
+    def execute(self, context):
+        return self._execute_sub_element_select(context, check_results, 'distorted_quads', 'FACE', '非平面四边面')
+
+
 # 检查操作符类列表
 classes = [
     LOWPOLY_OT_check_ngon_faces,
@@ -376,6 +416,8 @@ classes = [
     LOWPOLY_OT_select_collinear_vertices,
     LOWPOLY_OT_check_degenerate_geometry,
     LOWPOLY_OT_select_degenerate_geometry,
+    LOWPOLY_OT_check_distorted_quads,
+    LOWPOLY_OT_select_distorted_quads,
 ]
 
 

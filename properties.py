@@ -72,6 +72,11 @@ class LowPolyProperties(bpy.types.PropertyGroup):
         default=0,
         description="检测到的零面积面数量"
     )
+    distorted_quad_count: bpy.props.IntProperty(
+        name="扭曲四边面数",
+        default=0,
+        description="检测到的扭曲四边面数量（不共面的四边面）"
+    )
 
     # ── 运行选项 ────────────────────────────────────────────────
     only_selected: bpy.props.BoolProperty(
@@ -82,6 +87,14 @@ class LowPolyProperties(bpy.types.PropertyGroup):
 
     # ── 阈值设置 ────────────────────────────────────────────────
     # 面质量阈值
+    distortion_threshold: bpy.props.FloatProperty(
+        name="非平面阈值",
+        description="四边面不共面的距离阈值，超过该值视为扭曲四边面（默认 0.01）",
+        default=0.01,
+        min=0.0,
+        precision=6,
+        step=0.1
+    )
     degenerate_edge_threshold: bpy.props.FloatProperty(
         name="退化边阈值",
         description="判断零长度边的阈值，边长小于该值视为退化边（默认 0.0001）",

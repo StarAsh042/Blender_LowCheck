@@ -7,6 +7,7 @@ import bpy
 import bmesh
 import traceback
 from contextlib import contextmanager
+from mathutils import Vector, geometry
 from mathutils.kdtree import KDTree
 
 
@@ -775,6 +776,50 @@ def get_zero_area_faces(bm, threshold=0.0001):
         if face.calc_area() < threshold:
             zero_faces.append(face.index)
     return zero_faces
+
+
+def calculate_face_planarity(face):
+    """
+    计算四边形的平面度（用于检测扭曲四边面）
+
+    原理: 计算每个顶点到最佳拟合平面的距离，
+         距离越大说明四边面越扭曲（不共面）
+
+    Args:
+        face: BMesh面对象
+
+    Returns:
+        float: 最大偏离距离，0表示完全共面
+    """
+    if len(face.verts) != 4:
+        return 0.0
+
+    verts = [v.co for v in face.verts]
+
+    # 计算面的法线（使用前三点）
+    normal = geometry.normal(verts[0], verts[1], verts[2])
+
+    # 前三点共线时回退到另一组三点
+    if normal.length_squared < EPSILON:
+        normal = geometry.normal(verts[0], verts[2], verts[3])
+
+    # 如果所有点共线则退化，视为共面
+    if normal.length_squared < EPSILON:
+        return 0.0
+
+    normal.normalize()
+
+    # 计算所有顶点到平面的最大距离
+    # 使用第一个顶点作为平面上的参考点
+    reference_point = verts[0]
+
+    max_distance = 0.0
+    for vert in verts:
+        # 计算顶点到平面的距离
+        distance = abs((vert - reference_point).dot(normal))
+        max_distance = max(max_distance, distance)
+
+    return max_distance
 
 
 # ---------------------------------------------------------------------------
