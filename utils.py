@@ -822,6 +822,79 @@ def calculate_face_planarity(face):
     return max_distance
 
 
+def _is_valid_vector(vec):
+    """检查向量是否为有效非零向量（用于避免 angle() 调用崩溃）"""
+    return vec.length_squared >= ZERO_THRESHOLD * ZERO_THRESHOLD
+
+
+def is_face_concave(face):
+    """
+    检查四边形是否为内凹（凹四边形）
+
+    原理: 内凹四边面有一个内角 >= 180°(π)，等价于
+          一个顶点在其余三点构成的三角形内部。
+
+    边界情况:
+      - 非四边形 → 直接返回 False
+      - 存在退化边（相邻顶点重合）→ 返回 False（退化面无法判断凹凸性）
+
+    Args:
+        face: BMesh面对象
+
+    Returns:
+        bool: 如果是内凹四边形返回 True
+    """
+    if len(face.verts) != 4:
+        return False
+
+    verts = [v.co for v in face.verts]
+
+    # 边界验证：检查是否有相邻顶点重合（退化边）
+    for i in range(4):
+        if (verts[i] - verts[(i + 1) % 4]).length_squared < ZERO_THRESHOLD * ZERO_THRESHOLD:
+            # 退化四边形，无法判断凹凸性
+            return False
+
+    # 使用叉积符号法判断凹四边形
+    # 对凸四边形，依次取三条边形成的两个叉积方向应一致；
+    # 若某组叉积相反，则该四边形为凹四边形。
+    prev_sign = 0
+    for i in range(4):
+        a = verts[i]
+        b = verts[(i + 1) % 4]
+        c = verts[(i + 2) % 4]
+
+        edge1 = b - a
+        edge2 = c - b
+
+        # 同样保护零长度边
+        if not _is_valid_vector(edge1) or not _is_valid_vector(edge2):
+            return False
+
+        cross = edge1.cross(edge2)
+
+        # 叉积很小说明两条边几乎共线，该角的转向无法可靠判断，跳过
+        if cross.length < CONCAVITY_TOLERANCE:
+            continue
+
+        cross.normalize()
+        dot_with_normal = cross.dot(face.normal)
+
+        if abs(dot_with_normal) < CONCAVITY_TOLERANCE:
+            # 叉积几乎垂直于面法线（该角处几何退化），跳过
+            continue
+
+        sign = 1 if dot_with_normal > 0 else -1
+
+        if prev_sign == 0:
+            prev_sign = sign
+        elif sign != prev_sign:
+            # 叉积方向反转 → 存在大于 180° 的内角 → 凹四边形
+            return True
+
+    return False
+
+
 # ---------------------------------------------------------------------------
 # 元素选择与视图操作
 # ---------------------------------------------------------------------------

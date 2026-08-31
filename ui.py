@@ -102,6 +102,10 @@ class LOWPOLY_PT_quality_panel(bpy.types.Panel):
         row = box.row(align=True)
         row.prop(props, "distortion_threshold")
 
+        box = layout.box()
+        box.label(text="内凹四边面检查", icon='MESH_DATA')
+        _draw_op_row(box, "LOWPOLY_OT_check_concave_quads", "LOWPOLY_OT_select_concave_quads", f"数量: {props.concave_quad_count}")
+
 
 
 # ── 注册/注销 ──────────────────────────────────────────────────────────

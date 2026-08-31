@@ -77,6 +77,11 @@ class LowPolyProperties(bpy.types.PropertyGroup):
         default=0,
         description="检测到的扭曲四边面数量（不共面的四边面）"
     )
+    concave_quad_count: bpy.props.IntProperty(
+        name="内凹四边面数",
+        default=0,
+        description="检测到的内凹四边面数量"
+    )
 
     # ── 运行选项 ────────────────────────────────────────────────
     only_selected: bpy.props.BoolProperty(
