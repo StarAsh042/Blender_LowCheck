@@ -27,6 +27,21 @@ def store_result(store, key, data, element_type):
         store.pop(key, None)
 
 
+def store_object_result(store, key, objects):
+    """
+    写入物体级检测结果；结果为空时移除旧键。
+
+    Args:
+        store: check_results / optimize_results
+        key: 结果键名
+        objects: 物体列表
+    """
+    if objects:
+        store[key] = {'objects': list(objects), 'element_type': 'OBJECT'}
+    else:
+        store.pop(key, None)
+
+
 class LowPolyBaseOperator:
     """
     基础操作符类

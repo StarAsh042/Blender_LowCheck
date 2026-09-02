@@ -106,6 +106,15 @@ class LOWPOLY_PT_quality_panel(bpy.types.Panel):
         box.label(text="内凹四边面检查", icon='MESH_DATA')
         _draw_op_row(box, "LOWPOLY_OT_check_concave_quads", "LOWPOLY_OT_select_concave_quads", f"数量: {props.concave_quad_count}")
 
+        layout.separator()
+        layout.label(text="场景优化", icon='SCENE_DATA')
+
+        box = layout.box()
+        box.label(text="高面数物体检测", icon='MESH_DATA')
+        _draw_op_row(box, "LOWPOLY_OT_suggest_high_poly_objects", "LOWPOLY_OT_select_high_poly_objects", f"数量: {props.high_poly_count}")
+        row = box.row(align=True)
+        row.prop(props, "polycount_threshold")
+
 
 
 # ── 注册/注销 ──────────────────────────────────────────────────────────

@@ -8,7 +8,7 @@
 bl_info = {
     "name": "低模质量检查 (Lowpoly Check)",
     "author": "StarAsh042",
-    "version": (0, 3, 0),
+    "version": (0, 4, 0),
     "blender": (3, 4, 0),
     "location": "View3D > Sidebar > Lowpoly Tools",
     "description": "检查低多边形模型质量，覆盖网格拓扑、顶点质量、面质量、场景优化四大维度",

@@ -83,6 +83,13 @@ class LowPolyProperties(bpy.types.PropertyGroup):
         description="检测到的内凹四边面数量"
     )
 
+    # ── 场景优化：计数 ──────────────────────────────────────────
+    high_poly_count: bpy.props.IntProperty(
+        name="高面数物体数",
+        default=0,
+        description="检测到的高面数物体数量"
+    )
+
     # ── 运行选项 ────────────────────────────────────────────────
     only_selected: bpy.props.BoolProperty(
         name="仅处理选中物体",
@@ -148,6 +155,14 @@ class LowPolyProperties(bpy.types.PropertyGroup):
         default=5,
         min=2,
         max=100
+    )
+    # 场景优化阈值
+    polycount_threshold: bpy.props.IntProperty(
+        name="面数阈值",
+        description="物体面数超过该值即视为高面数物体（默认 50）",
+        default=50,
+        min=0,
+        max=100000
     )
 
 

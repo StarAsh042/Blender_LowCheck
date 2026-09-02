@@ -11,6 +11,7 @@ import bpy
 from .base import (
     LowPolyBaseOperator,
     install_error_guard,
+    store_object_result,
     store_result,
     uninstall_error_guard,
 )
@@ -48,6 +49,22 @@ def _do_suggest_dense_vertices(context):
     return _format_message("密集顶点", total_count)
 
 
+def _do_suggest_high_poly_objects(context):
+    """执行高面数物体检测，返回报告消息"""
+    props = context.scene.lowpoly
+    threshold = props.polycount_threshold
+
+    high_poly_objects = [
+        obj
+        for obj in utils.get_target_mesh_objects(context)
+        if len(obj.data.polygons) > threshold
+    ]
+
+    props.high_poly_count = len(high_poly_objects)
+    store_object_result(optimize_results, 'high_poly_objects', high_poly_objects)
+    return _format_message("高面数物体", len(high_poly_objects))
+
+
 class LOWPOLY_OT_suggest_dense_vertices(bpy.types.Operator, LowPolyBaseOperator):
     """密集顶点"""
     bl_idname = "lowpoly.suggest_dense_vertices"
@@ -70,10 +87,34 @@ class LOWPOLY_OT_select_dense_vertices(bpy.types.Operator, LowPolyBaseOperator):
         return self._execute_sub_element_select(context, optimize_results, 'dense_vertices', 'VERT', '密集顶点')
 
 
+class LOWPOLY_OT_suggest_high_poly_objects(bpy.types.Operator, LowPolyBaseOperator):
+    """高面数物体"""
+    bl_idname = "lowpoly.suggest_high_poly_objects"
+    bl_label = "高面数物体"
+    bl_description = "检测面数较高的物体"
+
+    def execute(self, context):
+        self.report({'INFO'}, _do_suggest_high_poly_objects(context))
+        return {'FINISHED'}
+
+
+class LOWPOLY_OT_select_high_poly_objects(bpy.types.Operator, LowPolyBaseOperator):
+    """选择高面数物体"""
+    bl_options = {'REGISTER', 'UNDO'}
+    bl_idname = "lowpoly.select_high_poly_objects"
+    bl_label = "选择高面数物体"
+    bl_description = "选择已检测出的高面数物体"
+
+    def execute(self, context):
+        return self._execute_sub_element_select(context, optimize_results, 'high_poly_objects', 'OBJECT', '高面数物体')
+
+
 # 优化操作符类列表
 classes = [
     LOWPOLY_OT_suggest_dense_vertices,
     LOWPOLY_OT_select_dense_vertices,
+    LOWPOLY_OT_suggest_high_poly_objects,
+    LOWPOLY_OT_select_high_poly_objects,
 ]
 
 
