@@ -89,6 +89,11 @@ class LowPolyProperties(bpy.types.PropertyGroup):
         default=0,
         description="检测到的高面数物体数量"
     )
+    small_bevel_count: bpy.props.IntProperty(
+        name="小倒角数",
+        default=0,
+        description="检测到的小倒角数量"
+    )
 
     # ── 运行选项 ────────────────────────────────────────────────
     only_selected: bpy.props.BoolProperty(
@@ -163,6 +168,14 @@ class LowPolyProperties(bpy.types.PropertyGroup):
         default=50,
         min=0,
         max=100000
+    )
+    bevel_width_threshold: bpy.props.FloatProperty(
+        name="倒角宽度阈值",
+        description="小倒角的宽度阈值，最短边小于该值即视为小倒角（默认 0.1）",
+        default=0.1,
+        min=0.0,
+        precision=4,
+        step=0.1
     )
 
 

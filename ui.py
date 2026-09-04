@@ -115,6 +115,12 @@ class LOWPOLY_PT_quality_panel(bpy.types.Panel):
         row = box.row(align=True)
         row.prop(props, "polycount_threshold")
 
+        box = layout.box()
+        box.label(text="小倒角结构检测", icon='FACESEL')
+        _draw_op_row(box, "LOWPOLY_OT_suggest_small_bevels", "LOWPOLY_OT_select_small_bevels", f"数量: {props.small_bevel_count}")
+        row = box.row(align=True)
+        row.prop(props, "bevel_width_threshold")
+
 
 
 # ── 注册/注销 ──────────────────────────────────────────────────────────

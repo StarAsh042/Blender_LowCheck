@@ -895,6 +895,52 @@ def is_face_concave(face):
     return False
 
 
+def get_small_bevels(bm, width_threshold=0.01):
+    """
+    检测小倒角结构（返回倒角面）
+
+    原理: 倒角面通常是四边形，有两条边较短（倒角宽度），
+          连接两个主面。只要最短边小于阈值即认为是小倒角。
+
+    Args:
+        bm: BMesh对象
+        width_threshold: 倒角宽度阈值
+
+    Returns:
+        list: 倒角面的索引列表
+    """
+    if len(bm.faces) == 0:
+        return []
+
+    bevel_faces = []
+
+    for face in bm.faces:
+        # 倒角面通常是四边形
+        if len(face.verts) != 4:
+            continue
+
+        # 找到与这个面相邻的所有面
+        adjacent_faces = set()
+        for edge in face.edges:
+            for linked_face in edge.link_faces:
+                if linked_face != face:
+                    adjacent_faces.add(linked_face)
+
+        # 倒角面应该连接至少两个面
+        if len(adjacent_faces) < 2:
+            continue
+
+        # 检查面的边长，找出最短边（倒角宽度）
+        edge_lengths = [(edge.calc_length(), edge) for edge in face.edges]
+        edge_lengths.sort(key=lambda x: x[0])  # 只按长度排序
+
+        # 只要最短边小于阈值，就认为是小倒角（不限制角度）
+        if edge_lengths[0][0] < width_threshold:
+            bevel_faces.append(face.index)
+
+    return bevel_faces
+
+
 # ---------------------------------------------------------------------------
 # 元素选择与视图操作
 # ---------------------------------------------------------------------------

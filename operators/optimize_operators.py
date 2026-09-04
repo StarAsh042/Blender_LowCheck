@@ -65,6 +65,26 @@ def _do_suggest_high_poly_objects(context):
     return _format_message("高面数物体", len(high_poly_objects))
 
 
+def _do_suggest_small_bevels(context):
+    """执行小倒角结构检测，返回报告消息"""
+    props = context.scene.lowpoly
+    threshold = props.bevel_width_threshold
+
+    data = {}
+    total_count = 0
+
+    for obj in utils.get_target_mesh_objects(context):
+        with utils.bmesh_from_object(obj) as bm:
+            small_bevels = utils.get_small_bevels(bm, threshold)
+            if small_bevels:
+                data[obj] = small_bevels
+                total_count += len(small_bevels)
+
+    props.small_bevel_count = total_count
+    store_result(optimize_results, 'small_bevels', data, 'FACE')
+    return _format_message("小倒角结构", total_count)
+
+
 class LOWPOLY_OT_suggest_dense_vertices(bpy.types.Operator, LowPolyBaseOperator):
     """密集顶点"""
     bl_idname = "lowpoly.suggest_dense_vertices"
@@ -109,12 +129,36 @@ class LOWPOLY_OT_select_high_poly_objects(bpy.types.Operator, LowPolyBaseOperato
         return self._execute_sub_element_select(context, optimize_results, 'high_poly_objects', 'OBJECT', '高面数物体')
 
 
+class LOWPOLY_OT_suggest_small_bevels(bpy.types.Operator, LowPolyBaseOperator):
+    """小倒角结构"""
+    bl_idname = "lowpoly.suggest_small_bevels"
+    bl_label = "小倒角结构"
+    bl_description = "检测较小的倒角结构"
+
+    def execute(self, context):
+        self.report({'INFO'}, _do_suggest_small_bevels(context))
+        return {'FINISHED'}
+
+
+class LOWPOLY_OT_select_small_bevels(bpy.types.Operator, LowPolyBaseOperator):
+    """选择小倒角结构"""
+    bl_options = {'REGISTER', 'UNDO'}
+    bl_idname = "lowpoly.select_small_bevels"
+    bl_label = "选择小倒角结构"
+    bl_description = "选择已检测出的小倒角结构"
+
+    def execute(self, context):
+        return self._execute_sub_element_select(context, optimize_results, 'small_bevels', 'FACE', '小倒角结构')
+
+
 # 优化操作符类列表
 classes = [
     LOWPOLY_OT_suggest_dense_vertices,
     LOWPOLY_OT_select_dense_vertices,
     LOWPOLY_OT_suggest_high_poly_objects,
     LOWPOLY_OT_select_high_poly_objects,
+    LOWPOLY_OT_suggest_small_bevels,
+    LOWPOLY_OT_select_small_bevels,
 ]
 
 
