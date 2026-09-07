@@ -121,6 +121,14 @@ class LOWPOLY_PT_quality_panel(bpy.types.Panel):
         row = box.row(align=True)
         row.prop(props, "bevel_width_threshold")
 
+        box = layout.box()
+        box.label(text="朝下水平面检测", icon='FACESEL')
+        _draw_op_row(box, "LOWPOLY_OT_suggest_downward_faces", "LOWPOLY_OT_select_downward_faces", f"数量: {props.downward_face_count}")
+        row = box.row(align=True)
+        row.prop(props, "downward_area_threshold")
+        row = box.row(align=True)
+        row.prop(props, "downward_angle_threshold")
+
 
 
 # ── 注册/注销 ──────────────────────────────────────────────────────────

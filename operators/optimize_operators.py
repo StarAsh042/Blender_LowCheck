@@ -85,6 +85,27 @@ def _do_suggest_small_bevels(context):
     return _format_message("小倒角结构", total_count)
 
 
+def _do_suggest_downward_faces(context):
+    """执行朝下水平面检测，返回报告消息"""
+    props = context.scene.lowpoly
+    area = props.downward_area_threshold
+    angle = props.downward_angle_threshold
+
+    data = {}
+    total_count = 0
+
+    for obj in utils.get_target_mesh_objects(context):
+        with utils.bmesh_from_object(obj) as bm:
+            downward_faces = utils.get_downward_faces(bm, area, angle)
+            if downward_faces:
+                data[obj] = downward_faces
+                total_count += len(downward_faces)
+
+    props.downward_face_count = total_count
+    store_result(optimize_results, 'downward_faces', data, 'FACE')
+    return _format_message("朝下水平面", total_count)
+
+
 class LOWPOLY_OT_suggest_dense_vertices(bpy.types.Operator, LowPolyBaseOperator):
     """密集顶点"""
     bl_idname = "lowpoly.suggest_dense_vertices"
@@ -151,6 +172,28 @@ class LOWPOLY_OT_select_small_bevels(bpy.types.Operator, LowPolyBaseOperator):
         return self._execute_sub_element_select(context, optimize_results, 'small_bevels', 'FACE', '小倒角结构')
 
 
+class LOWPOLY_OT_suggest_downward_faces(bpy.types.Operator, LowPolyBaseOperator):
+    """朝下水平面"""
+    bl_idname = "lowpoly.suggest_downward_faces"
+    bl_label = "朝下水平面"
+    bl_description = "检测水平朝下的面（可能浪费面数）"
+
+    def execute(self, context):
+        self.report({'INFO'}, _do_suggest_downward_faces(context))
+        return {'FINISHED'}
+
+
+class LOWPOLY_OT_select_downward_faces(bpy.types.Operator, LowPolyBaseOperator):
+    """选择朝下水平面"""
+    bl_options = {'REGISTER', 'UNDO'}
+    bl_idname = "lowpoly.select_downward_faces"
+    bl_label = "选择朝下水平面"
+    bl_description = "选择已检测出的朝下水平面"
+
+    def execute(self, context):
+        return self._execute_sub_element_select(context, optimize_results, 'downward_faces', 'FACE', '朝下水平面')
+
+
 # 优化操作符类列表
 classes = [
     LOWPOLY_OT_suggest_dense_vertices,
@@ -159,6 +202,8 @@ classes = [
     LOWPOLY_OT_select_high_poly_objects,
     LOWPOLY_OT_suggest_small_bevels,
     LOWPOLY_OT_select_small_bevels,
+    LOWPOLY_OT_suggest_downward_faces,
+    LOWPOLY_OT_select_downward_faces,
 ]
 
 

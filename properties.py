@@ -94,6 +94,11 @@ class LowPolyProperties(bpy.types.PropertyGroup):
         default=0,
         description="检测到的小倒角数量"
     )
+    downward_face_count: bpy.props.IntProperty(
+        name="朝下面数",
+        default=0,
+        description="检测到的朝下面数量"
+    )
 
     # ── 运行选项 ────────────────────────────────────────────────
     only_selected: bpy.props.BoolProperty(
@@ -176,6 +181,23 @@ class LowPolyProperties(bpy.types.PropertyGroup):
         min=0.0,
         precision=4,
         step=0.1
+    )
+    downward_area_threshold: bpy.props.FloatProperty(
+        name="朝下面积阈值",
+        description="检测朝下面的最小面积阈值，0 表示全部检测（默认 0）",
+        default=0.0,
+        min=0.0,
+        precision=4,
+        step=0.1
+    )
+    downward_angle_threshold: bpy.props.FloatProperty(
+        name="朝下角度阈值",
+        description="面法线与竖直向下方向的夹角阈值（度），小于此值视为朝下水平面（默认 5）",
+        default=5.0,
+        min=0.0,
+        max=90.0,
+        precision=1,
+        step=1
     )
 
 

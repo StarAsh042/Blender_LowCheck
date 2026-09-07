@@ -8,6 +8,7 @@ import bmesh
 import traceback
 from contextlib import contextmanager
 from mathutils import Vector, geometry
+from math import radians, cos
 from mathutils.kdtree import KDTree
 
 
@@ -939,6 +940,39 @@ def get_small_bevels(bm, width_threshold=0.01):
             bevel_faces.append(face.index)
 
     return bevel_faces
+
+
+def get_downward_faces(bm, area_threshold=0.0, angle_threshold=5.0):
+    """
+    检测朝下的水平面
+
+    原理: 面的法线朝下（与Z轴负方向点积接近1）表示朝下
+
+    Args:
+        bm: BMesh对象
+        area_threshold: 最小面积阈值，0表示全部检测
+        angle_threshold: 角度阈值（度），面法线与竖直向下方向的夹角小于此值视为朝下水平面
+
+    Returns:
+        list: 朝下面索引列表
+    """
+    if len(bm.faces) == 0:
+        return []
+
+    downward_faces = []
+    down = Vector((0, 0, -1))
+
+    # 将角度阈值转换为余弦值阈值
+    cos_threshold = cos(radians(angle_threshold))
+
+    for face in bm.faces:
+        # 法线与朝下方向的点积接近1，表示朝下（不使用abs，避免检测到朝上的面）
+        dot_product = face.normal.dot(down)
+        if dot_product > cos_threshold:  # 严格朝下
+            if area_threshold == 0 or face.calc_area() >= area_threshold:
+                downward_faces.append(face.index)
+
+    return downward_faces
 
 
 # ---------------------------------------------------------------------------
