@@ -99,6 +99,11 @@ class LowPolyProperties(bpy.types.PropertyGroup):
         default=0,
         description="检测到的朝下面数量"
     )
+    intersecting_object_count: bpy.props.IntProperty(
+        name="穿插物体数",
+        default=0,
+        description="检测到的穿插物体数量"
+    )
 
     # ── 运行选项 ────────────────────────────────────────────────
     only_selected: bpy.props.BoolProperty(
@@ -198,6 +203,15 @@ class LowPolyProperties(bpy.types.PropertyGroup):
         max=90.0,
         precision=1,
         step=1
+    )
+    intersect_overlap_threshold: bpy.props.FloatProperty(
+        name="穿插重叠阈值",
+        description="最小重叠比例阈值（0-1），包围盒重叠比例超过此值才认为是穿插（默认 0）",
+        default=0.0,
+        min=0.0,
+        max=1.0,
+        precision=2,
+        step=0.1
     )
 
 

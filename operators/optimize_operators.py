@@ -106,6 +106,18 @@ def _do_suggest_downward_faces(context):
     return _format_message("朝下水平面", total_count)
 
 
+def _do_suggest_intersecting_objects(context):
+    """执行穿插物体检测，返回报告消息"""
+    props = context.scene.lowpoly
+    intersecting_objects = utils.get_intersecting_objects(
+        context, props.intersect_overlap_threshold
+    )
+
+    props.intersecting_object_count = len(intersecting_objects)
+    store_object_result(optimize_results, 'intersecting_objects', intersecting_objects)
+    return _format_message("穿插物体", len(intersecting_objects))
+
+
 class LOWPOLY_OT_suggest_dense_vertices(bpy.types.Operator, LowPolyBaseOperator):
     """密集顶点"""
     bl_idname = "lowpoly.suggest_dense_vertices"
@@ -194,6 +206,28 @@ class LOWPOLY_OT_select_downward_faces(bpy.types.Operator, LowPolyBaseOperator):
         return self._execute_sub_element_select(context, optimize_results, 'downward_faces', 'FACE', '朝下水平面')
 
 
+class LOWPOLY_OT_suggest_intersecting_objects(bpy.types.Operator, LowPolyBaseOperator):
+    """穿插物体"""
+    bl_idname = "lowpoly.suggest_intersecting_objects"
+    bl_label = "穿插物体"
+    bl_description = "检测互相穿插的物体"
+
+    def execute(self, context):
+        self.report({'INFO'}, _do_suggest_intersecting_objects(context))
+        return {'FINISHED'}
+
+
+class LOWPOLY_OT_select_intersecting_objects(bpy.types.Operator, LowPolyBaseOperator):
+    """选择穿插物体"""
+    bl_options = {'REGISTER', 'UNDO'}
+    bl_idname = "lowpoly.select_intersecting_objects"
+    bl_label = "选择穿插物体"
+    bl_description = "选择已检测出的穿插物体"
+
+    def execute(self, context):
+        return self._execute_sub_element_select(context, optimize_results, 'intersecting_objects', 'OBJECT', '穿插物体')
+
+
 # 优化操作符类列表
 classes = [
     LOWPOLY_OT_suggest_dense_vertices,
@@ -204,6 +238,8 @@ classes = [
     LOWPOLY_OT_select_small_bevels,
     LOWPOLY_OT_suggest_downward_faces,
     LOWPOLY_OT_select_downward_faces,
+    LOWPOLY_OT_suggest_intersecting_objects,
+    LOWPOLY_OT_select_intersecting_objects,
 ]
 
 

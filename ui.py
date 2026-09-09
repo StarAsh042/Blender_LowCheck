@@ -129,6 +129,12 @@ class LOWPOLY_PT_quality_panel(bpy.types.Panel):
         row = box.row(align=True)
         row.prop(props, "downward_angle_threshold")
 
+        box = layout.box()
+        box.label(text="穿插物体检测", icon='OBJECT_DATA')
+        _draw_op_row(box, "LOWPOLY_OT_suggest_intersecting_objects", "LOWPOLY_OT_select_intersecting_objects", f"数量: {props.intersecting_object_count}")
+        row = box.row(align=True)
+        row.prop(props, "intersect_overlap_threshold")
+
 
 
 # ── 注册/注销 ──────────────────────────────────────────────────────────

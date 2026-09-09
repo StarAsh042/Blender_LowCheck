@@ -975,6 +975,102 @@ def get_downward_faces(bm, area_threshold=0.0, angle_threshold=5.0):
     return downward_faces
 
 
+def _boxes_overlap(min1, max1, min2, max2, overlap_threshold, volume1, volume2):
+    """
+    判断两个 AABB 是否「足够重叠」。
+
+    重叠比例定义为 ``相交体积 / 较小包围盒体积``。
+
+    Args:
+        min1, max1: 包围盒 1 的最小/最大角
+        min2, max2: 包围盒 2 的最小/最大角
+        overlap_threshold: 最小重叠比例（<= 0 表示只要有接触就算重叠）
+        volume1, volume2: 两个包围盒的体积
+
+    Returns:
+        bool: 是否判定为重叠（潜在穿插）
+    """
+    # 三轴 AABB 相交测试（任一分隔轴即可提前否定）
+    if (min1.x > max2.x or max1.x < min2.x
+            or min1.y > max2.y or max1.y < min2.y
+            or min1.z > max2.z or max1.z < min2.z):
+        return False
+
+    if overlap_threshold <= 0:
+        # 阈值为 0：只要有接触就算穿插
+        return True
+
+    overlap_size = Vector((
+        min(max1.x, max2.x) - max(min1.x, min2.x),
+        min(max1.y, max2.y) - max(min1.y, min2.y),
+        min(max1.z, max2.z) - max(min1.z, min2.z),
+    ))
+    if overlap_size.x <= 0 or overlap_size.y <= 0 or overlap_size.z <= 0:
+        return False
+
+    min_volume = min(volume1, volume2)
+    if min_volume <= 0:
+        return False
+
+    overlap_volume = overlap_size.x * overlap_size.y * overlap_size.z
+    return overlap_volume / min_volume >= overlap_threshold
+
+
+def get_intersecting_objects(context, overlap_threshold=0.0):
+    """
+    检测穿插物体（基于世界空间包围盒）
+
+    原理: 两个物体的 AABB 相交、且重叠体积占较小包围盒的比例达标时，
+          认为它们可能穿插。
+
+    .. note::
+       包围盒检测是**保守**判据——它只能说明「可能穿插」，不能证明实际
+       网格相交。这是刻意的性能取舍（逐三角求交代价极高）。把
+       ``intersect_overlap_threshold`` 调大可以过滤掉「仅边界相切」的误报。
+
+    Args:
+        context: Blender上下文对象
+        overlap_threshold: 最小重叠比例阈值（0-1，0表示只要有接触就算穿插）
+
+    Returns:
+        list: 穿插物体列表
+    """
+    # 空网格（无顶点）的包围盒退化为原点处的零体积盒，会产生大量误报，直接排除
+    objects = [
+        obj for obj in get_target_mesh_objects(context)
+        if len(obj.data.vertices) > 0
+    ]
+    if len(objects) < 2:
+        return []
+
+    def world_box(obj):
+        corners = [obj.matrix_world @ Vector(corner) for corner in obj.bound_box]
+        min_corner = Vector((
+            min(c.x for c in corners),
+            min(c.y for c in corners),
+            min(c.z for c in corners),
+        ))
+        max_corner = Vector((
+            max(c.x for c in corners),
+            max(c.y for c in corners),
+            max(c.z for c in corners),
+        ))
+        size = max_corner - min_corner
+        return min_corner, max_corner, size.x * size.y * size.z
+
+    intersecting = []
+    for i, obj_a in enumerate(objects):
+        for obj_b in objects[i + 1:]:
+            min1, max1, volume1 = world_box(obj_a)
+            min2, max2, volume2 = world_box(obj_b)
+            if _boxes_overlap(min1, max1, min2, max2, overlap_threshold,
+                              volume1, volume2):
+                intersecting.append(obj_a)
+                intersecting.append(obj_b)
+
+    return list(set(intersecting))
+
+
 # ---------------------------------------------------------------------------
 # 元素选择与视图操作
 # ---------------------------------------------------------------------------
