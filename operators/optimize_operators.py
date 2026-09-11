@@ -11,6 +11,7 @@ import bpy
 from .base import (
     LowPolyBaseOperator,
     install_error_guard,
+    run_pipeline,
     store_object_result,
     store_result,
     uninstall_error_guard,
@@ -26,6 +27,17 @@ optimize_results = {}
 def _format_message(label, count):
     """「检测到 N 个 X / 未检测到 X」报告文案"""
     return f"检测到 {count} 个{label}" if count > 0 else f"未检测到{label}"
+
+
+# 该模块负责更新的计数属性（用于「清除结果」）
+COUNT_PROPERTIES = (
+    "dense_vert_count",
+    "high_poly_count",
+    "small_bevel_count",
+    "downward_face_count",
+    "intersecting_object_count",
+    "non_uniform_scale_count",
+)
 
 
 def _do_suggest_dense_vertices(context):
@@ -116,6 +128,37 @@ def _do_suggest_intersecting_objects(context):
     props.intersecting_object_count = len(intersecting_objects)
     store_object_result(optimize_results, 'intersecting_objects', intersecting_objects)
     return _format_message("穿插物体", len(intersecting_objects))
+
+
+def _do_suggest_non_uniform_scale(context):
+    """执行非均匀缩放物体检测，返回报告消息"""
+    props = context.scene.lowpoly
+    non_uniform = utils.get_non_uniform_scale_objects(context)
+
+    props.non_uniform_scale_count = len(non_uniform)
+    store_object_result(optimize_results, 'non_uniform_scale', non_uniform)
+    return _format_message("非均匀缩放物体", len(non_uniform))
+
+
+#: 「运行全部优化检查」的执行清单（顺序与面板分组一致）
+_OPTIMIZE_PIPELINE = (
+    ("密集顶点检测", _do_suggest_dense_vertices),
+    ("高面数物体检测", _do_suggest_high_poly_objects),
+    ("小倒角结构检测", _do_suggest_small_bevels),
+    ("朝下水平面检测", _do_suggest_downward_faces),
+    ("穿插物体检测", _do_suggest_intersecting_objects),
+    ("非均匀缩放物体检测", _do_suggest_non_uniform_scale),
+)
+
+
+def get_optimize_pipeline():
+    """
+    返回「运行全部优化检查」的执行清单。
+
+    Returns:
+        list[tuple[str, callable]]: (中文标签, 检测函数)
+    """
+    return list(_OPTIMIZE_PIPELINE)
 
 
 class LOWPOLY_OT_suggest_dense_vertices(bpy.types.Operator, LowPolyBaseOperator):
@@ -228,6 +271,55 @@ class LOWPOLY_OT_select_intersecting_objects(bpy.types.Operator, LowPolyBaseOper
         return self._execute_sub_element_select(context, optimize_results, 'intersecting_objects', 'OBJECT', '穿插物体')
 
 
+class LOWPOLY_OT_suggest_non_uniform_scale(bpy.types.Operator, LowPolyBaseOperator):
+    """非均匀缩放物体"""
+    bl_idname = "lowpoly.suggest_non_uniform_scale"
+    bl_label = "非均匀缩放物体"
+    bl_description = "检测缩放值不统一的物体"
+
+    def execute(self, context):
+        self.report({'INFO'}, _do_suggest_non_uniform_scale(context))
+        return {'FINISHED'}
+
+
+class LOWPOLY_OT_select_non_uniform_scale(bpy.types.Operator, LowPolyBaseOperator):
+    """选择非均匀缩放物体"""
+    bl_options = {'REGISTER', 'UNDO'}
+    bl_idname = "lowpoly.select_non_uniform_scale"
+    bl_label = "选择非均匀缩放物体"
+    bl_description = "选择已检测出的非均匀缩放物体"
+
+    def execute(self, context):
+        return self._execute_sub_element_select(context, optimize_results, 'non_uniform_scale', 'OBJECT', '非均匀缩放物体')
+
+
+class LOWPOLY_OT_run_all_optimization_checks(bpy.types.Operator, LowPolyBaseOperator):
+    """运行全部优化检查"""
+    bl_idname = "lowpoly.run_all_optimization_checks"
+    bl_label = "运行全部优化检查"
+    bl_description = "运行所有优化检查并更新计数"
+
+    def execute(self, context):
+        optimize_results.clear()
+
+        objects = utils.get_target_mesh_objects(context)
+        if not objects:
+            self.report({'WARNING'}, "没有可检测的网格物体（请检查可见性或「仅处理选中物体」选项）")
+            return {'CANCELLED'}
+
+        total_verts = sum(len(obj.data.vertices) for obj in objects)
+        if total_verts > 500000:
+            self.report(
+                {'WARNING'},
+                f"检测到大型网格（{total_verts} 个顶点），检查可能需要较长时间",
+            )
+
+        failed = run_pipeline(context, get_optimize_pipeline(), report=self.report)
+        if not failed:
+            self.report({'INFO'}, f"所有优化检查已完成（共 {len(objects)} 个物体）")
+        return {'FINISHED'}
+
+
 # 优化操作符类列表
 classes = [
     LOWPOLY_OT_suggest_dense_vertices,
@@ -240,6 +332,9 @@ classes = [
     LOWPOLY_OT_select_downward_faces,
     LOWPOLY_OT_suggest_intersecting_objects,
     LOWPOLY_OT_select_intersecting_objects,
+    LOWPOLY_OT_suggest_non_uniform_scale,
+    LOWPOLY_OT_select_non_uniform_scale,
+    LOWPOLY_OT_run_all_optimization_checks,
 ]
 
 

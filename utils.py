@@ -1071,6 +1071,27 @@ def get_intersecting_objects(context, overlap_threshold=0.0):
     return list(set(intersecting))
 
 
+def get_non_uniform_scale_objects(context):
+    """
+    检测非均匀缩放的物体
+
+    原理: 非均匀缩放（scale.x/y/z 不相等）会导致法线变换错误、
+          UV 拉伸异常和碰撞体变形，影响下游管线。
+
+    Args:
+        context: Blender 上下文对象
+
+    Returns:
+        list: 非均匀缩放的物体列表
+    """
+    non_uniform = []
+    for obj in get_target_mesh_objects(context):
+        scale = obj.scale
+        if abs(scale.x - scale.y) > EPSILON or abs(scale.y - scale.z) > EPSILON or abs(scale.x - scale.z) > EPSILON:
+            non_uniform.append(obj)
+    return non_uniform
+
+
 # ---------------------------------------------------------------------------
 # 元素选择与视图操作
 # ---------------------------------------------------------------------------

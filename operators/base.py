@@ -42,6 +42,70 @@ def store_object_result(store, key, objects):
         store.pop(key, None)
 
 
+def run_pipeline(context, pipeline, report=None):
+    """
+    依次执行检测流水线，单项失败不影响其余项。
+
+    使用 ``utils.detection_session()`` 复用每个物体的 BMesh，避免为
+    十余项检测重复构建网格副本（这是旧版本的主要性能瓶颈）。
+
+    Args:
+        context: Blender 上下文
+        pipeline: [(中文标签, 检测函数), ...]
+        report: 可选的报告回调 callable(set, str)
+
+    Returns:
+        list[str]: 失败的检测项标签列表
+    """
+    failed = []
+
+    # 后台模式下进度条不可用，失败时降级为「无进度条」而非中断。
+    # progress 是「还能继续更新」的句柄（更新失败后置空以免反复抛错）；
+    # progress_wm 一旦 progress_begin 成功就固定下来，保证 finally 里
+    # 一定能调用 progress_end()——否则更新失败会把进度条永久留在界面上。
+    progress = None
+    progress_wm = None
+    try:
+        context.window_manager.progress_begin(0, len(pipeline))
+        progress = context.window_manager
+        progress_wm = context.window_manager
+    except Exception as exc:  # noqa: BLE001
+        utils.log_exception("初始化进度条失败（已忽略）", exc)
+
+    try:
+        with utils.detection_session():
+            for i, (label, check_fn) in enumerate(pipeline):
+                if progress is not None:
+                    try:
+                        progress.progress_update(i)
+                    except Exception:  # noqa: BLE001
+                        progress = None
+                try:
+                    check_fn(context)
+                except Exception as exc:  # noqa: BLE001 - 单项失败不应中断整体
+                    failed.append(label)
+                    utils.log_exception(f"检查项「{label}」失败", exc)
+            if progress is not None:
+                try:
+                    progress.progress_update(len(pipeline))
+                except Exception:  # noqa: BLE001
+                    pass
+    finally:
+        # 与 progress_begin 严格配对，即使中途更新失败也要结束进度条
+        if progress_wm is not None:
+            try:
+                progress_wm.progress_end()
+            except Exception:  # noqa: BLE001
+                pass
+
+    if report is not None:
+        if failed:
+            report({'WARNING'}, f"完成，但以下检查项失败: {', '.join(failed)}")
+        else:
+            report({'INFO'}, "全部检查已完成")
+    return failed
+
+
 class LowPolyBaseOperator:
     """
     基础操作符类
@@ -194,6 +258,22 @@ class LowPolyBaseOperator:
         if skipped:
             message += f"，跳过 {skipped} 个已删除物体"
         self.report({'INFO'}, message)
+        return {'FINISHED'}
+
+    def _clear_all_results(self, context):
+        """清空全部检测结果与计数（由 clear_results 操作符调用）"""
+        from . import check_operators, optimize_operators
+
+        check_operators.check_results.clear()
+        optimize_operators.optimize_results.clear()
+
+        props = context.scene.lowpoly
+        for count_name in (check_operators.COUNT_PROPERTIES
+                           + optimize_operators.COUNT_PROPERTIES):
+            if hasattr(props, count_name):
+                setattr(props, count_name, 0)
+
+        self.report({'INFO'}, "已清除所有检测结果")
         return {'FINISHED'}
 
 

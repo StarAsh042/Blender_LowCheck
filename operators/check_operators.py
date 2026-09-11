@@ -15,14 +15,41 @@ import bpy
 from .base import (
     LowPolyBaseOperator,
     install_error_guard,
+    run_pipeline,
     store_result,
     uninstall_error_guard,
+)
+from .optimize_operators import (
+    optimize_results,
+    _do_suggest_dense_vertices,
+    _do_suggest_downward_faces,
+    _do_suggest_high_poly_objects,
+    _do_suggest_intersecting_objects,
+    _do_suggest_non_uniform_scale,
+    _do_suggest_small_bevels,
 )
 from .. import utils
 
 
 # 全局存储检查结果
 check_results = {}
+
+
+# 该模块负责更新的计数属性（用于「清除结果」）
+COUNT_PROPERTIES = (
+    "ngon_count",
+    "overlapping_face_count",
+    "wrong_normal_count",
+    "non_manifold_edge_count",
+    "loose_vert_count",
+    "loose_edge_count",
+    "unwelded_vert_count",
+    "collinear_vert_count",
+    "degenerate_edge_count",
+    "degenerate_face_count",
+    "distorted_quad_count",
+    "concave_quad_count",
+)
 
 
 # 简写别名（保持本模块内调用简洁）
@@ -215,6 +242,37 @@ def _do_check_concave_quads(context):
     props.concave_quad_count = total
     _store_result(check_results, 'concave_quads', data, 'FACE')
     return _format_message("内凹四边面", total)
+
+
+#: 「运行全部检查」的执行清单（顺序与面板分组一致）
+_CHECK_PIPELINE = (
+    ("N-gon面检查", _do_check_ngon),
+    ("重叠面检查", _do_check_overlapping_faces),
+    ("错误法线检查（朝内）", _do_check_wrong_normals),
+    ("非流形边检查", _do_check_non_manifold_edges),
+    ("孤立几何体检查", _do_check_loose_geometry),
+    ("未焊接点检查", _do_check_unwelded_vertices),
+    ("共线顶点检查", _do_check_collinear_vertices),
+    ("密集顶点检测", _do_suggest_dense_vertices),
+    ("退化几何体检查", _do_check_degenerate_geometry),
+    ("非平面四边面检查", _do_check_distorted_quads),
+    ("内凹四边面检查", _do_check_concave_quads),
+    ("高面数物体检测", _do_suggest_high_poly_objects),
+    ("小倒角结构检测", _do_suggest_small_bevels),
+    ("朝下水平面检测", _do_suggest_downward_faces),
+    ("穿插物体检测", _do_suggest_intersecting_objects),
+    ("非均匀缩放物体检测", _do_suggest_non_uniform_scale),
+)
+
+
+def get_check_pipeline():
+    """
+    返回「运行全部检查」的执行清单。
+
+    Returns:
+        list[tuple[str, callable]]: (中文标签, 检测函数)
+    """
+    return list(_CHECK_PIPELINE)
 
 
 class LOWPOLY_OT_check_ngon_faces(bpy.types.Operator, LowPolyBaseOperator):
@@ -437,6 +495,47 @@ class LOWPOLY_OT_select_concave_quads(bpy.types.Operator, LowPolyBaseOperator):
         return self._execute_sub_element_select(context, check_results, 'concave_quads', 'FACE', '内凹四边面')
 
 
+class LOWPOLY_OT_run_all_checks(bpy.types.Operator, LowPolyBaseOperator):
+    """运行全部检查"""
+    bl_idname = "lowpoly.run_all_checks"
+    bl_label = "运行全部检查"
+    bl_description = "运行全部网格质量和场景优化检查并更新计数"
+
+    def execute(self, context):
+        check_results.clear()
+        optimize_results.clear()
+
+        objects = utils.get_target_mesh_objects(context)
+        if not objects:
+            self.report({'WARNING'}, "没有可检测的网格物体（请检查可见性或「仅处理选中物体」选项）")
+            return {'CANCELLED'}
+
+        total_verts = sum(len(obj.data.vertices) for obj in objects)
+        if total_verts > 500000:
+            self.report(
+                {'WARNING'},
+                f"检测到大型网格（{total_verts} 个顶点），检查可能需要较长时间",
+            )
+
+        pipeline = get_check_pipeline()
+        failed = run_pipeline(context, pipeline, report=self.report)
+
+        if not failed:
+            self.report({'INFO'}, f"全部检查已完成（共 {len(objects)} 个物体）")
+        return {'FINISHED'}
+
+
+class LOWPOLY_OT_clear_results(bpy.types.Operator, LowPolyBaseOperator):
+    """清除全部检测结果"""
+    bl_idname = "lowpoly.clear_results"
+    bl_label = "清除检测结果"
+    bl_description = "清空所有检测结果与计数（不修改模型）"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        return self._clear_all_results(context)
+
+
 # 检查操作符类列表
 classes = [
     LOWPOLY_OT_check_ngon_faces,
@@ -459,6 +558,8 @@ classes = [
     LOWPOLY_OT_select_distorted_quads,
     LOWPOLY_OT_check_concave_quads,
     LOWPOLY_OT_select_concave_quads,
+    LOWPOLY_OT_run_all_checks,
+    LOWPOLY_OT_clear_results,
 ]
 
 

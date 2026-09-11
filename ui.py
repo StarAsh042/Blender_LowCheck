@@ -4,6 +4,28 @@ UI面板模块
 """
 
 import bpy
+#: 汇总面板显示的问题总数所需的计数属性（随检测项增加而扩充）
+_SUMMARY_COUNTS = (
+    "ngon_count",
+    "overlapping_face_count",
+    "wrong_normal_count",
+    "non_manifold_edge_count",
+    "loose_vert_count",
+    "loose_edge_count",
+    "unwelded_vert_count",
+    "collinear_vert_count",
+    "dense_vert_count",
+    "degenerate_edge_count",
+    "degenerate_face_count",
+    "distorted_quad_count",
+    "concave_quad_count",
+    "high_poly_count",
+    "small_bevel_count",
+    "downward_face_count",
+    "intersecting_object_count",
+    "non_uniform_scale_count",
+)
+
 
 def _draw_op_row(layout, check_op, select_op, count_text):
     """绘制 检查 / 选择 按钮 + 数量标签"""
@@ -11,6 +33,11 @@ def _draw_op_row(layout, check_op, select_op, count_text):
     row.operator(check_op, text="检查")
     row.operator(select_op, text="选择")
     row.label(text=count_text)
+
+
+def _count_problems(props):
+    """统计面板显示的问题总数"""
+    return sum(getattr(props, name, 0) for name in _SUMMARY_COUNTS)
 
 
 class LOWPOLY_PT_quality_panel(bpy.types.Panel):
@@ -38,6 +65,20 @@ class LOWPOLY_PT_quality_panel(bpy.types.Panel):
         box = layout.box()
         box.label(text="检测范围", icon='RESTRICT_SELECT_OFF')
         box.prop(props, "only_selected", toggle=True)
+
+        col = box.column(align=True)
+        col.operator("lowpoly.run_all_checks", text="运行全部检查", icon='FILE_REFRESH')
+        row = col.row(align=True)
+        row.operator("lowpoly.clear_results", text="清除结果", icon='X')
+
+        total = _count_problems(props)
+        summary = layout.box()
+        srow = summary.row()
+        srow.alignment = 'LEFT'
+        if total > 0:
+            srow.label(text=f"问题总数: {total}", icon='ERROR')
+        else:
+            srow.label(text="暂无检测结果", icon='INFO')
 
         layout.separator()
         layout.label(text="网格拓扑", icon='MESH_DATA')
@@ -134,6 +175,10 @@ class LOWPOLY_PT_quality_panel(bpy.types.Panel):
         _draw_op_row(box, "LOWPOLY_OT_suggest_intersecting_objects", "LOWPOLY_OT_select_intersecting_objects", f"数量: {props.intersecting_object_count}")
         row = box.row(align=True)
         row.prop(props, "intersect_overlap_threshold")
+
+        box = layout.box()
+        box.label(text="非均匀缩放物体检测", icon='OBJECT_DATA')
+        _draw_op_row(box, "LOWPOLY_OT_suggest_non_uniform_scale", "LOWPOLY_OT_select_non_uniform_scale", f"数量: {props.non_uniform_scale_count}")
 
 
 

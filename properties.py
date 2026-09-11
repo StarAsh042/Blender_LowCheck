@@ -104,6 +104,11 @@ class LowPolyProperties(bpy.types.PropertyGroup):
         default=0,
         description="检测到的穿插物体数量"
     )
+    non_uniform_scale_count: bpy.props.IntProperty(
+        name="非均匀缩放物体数",
+        default=0,
+        description="缩放值不统一的物体数量"
+    )
 
     # ── 运行选项 ────────────────────────────────────────────────
     only_selected: bpy.props.BoolProperty(
