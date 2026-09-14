@@ -19,6 +19,8 @@ from .base import (
 
 from .. import utils
 
+from .. import registry
+
 
 # 全局存储优化结果
 optimize_results = {}
@@ -29,15 +31,8 @@ def _format_message(label, count):
     return f"检测到 {count} 个{label}" if count > 0 else f"未检测到{label}"
 
 
-# 该模块负责更新的计数属性（用于「清除结果」）
-COUNT_PROPERTIES = (
-    "dense_vert_count",
-    "high_poly_count",
-    "small_bevel_count",
-    "downward_face_count",
-    "intersecting_object_count",
-    "non_uniform_scale_count",
-)
+# 该模块负责更新的计数属性（用于「清除结果」）——由 registry 单一数据源派生
+COUNT_PROPERTIES = registry.count_properties('optimize')
 
 
 def _do_suggest_dense_vertices(context):
@@ -140,25 +135,31 @@ def _do_suggest_non_uniform_scale(context):
     return _format_message("非均匀缩放物体", len(non_uniform))
 
 
-#: 「运行全部优化检查」的执行清单（顺序与面板分组一致）
-_OPTIMIZE_PIPELINE = (
-    ("密集顶点检测", _do_suggest_dense_vertices),
-    ("高面数物体检测", _do_suggest_high_poly_objects),
-    ("小倒角结构检测", _do_suggest_small_bevels),
-    ("朝下水平面检测", _do_suggest_downward_faces),
-    ("穿插物体检测", _do_suggest_intersecting_objects),
-    ("非均匀缩放物体检测", _do_suggest_non_uniform_scale),
-)
+#: 检测项键 → 优化检测函数（与 ``registry.CHECKS`` 的 ``key`` 一一对应）
+_OPTIMIZE_FUNCTIONS = {
+    'dense_vertices': _do_suggest_dense_vertices,
+    'high_poly_objects': _do_suggest_high_poly_objects,
+    'small_bevels': _do_suggest_small_bevels,
+    'downward_faces': _do_suggest_downward_faces,
+    'intersecting_objects': _do_suggest_intersecting_objects,
+    'non_uniform_scale': _do_suggest_non_uniform_scale,
+}
 
 
 def get_optimize_pipeline():
     """
     返回「运行全部优化检查」的执行清单。
 
+    由 ``registry.CHECKS`` 中 ``owner == 'optimize'`` 的声明派生。
+
     Returns:
         list[tuple[str, callable]]: (中文标签, 检测函数)
     """
-    return list(_OPTIMIZE_PIPELINE)
+    return [
+        (spec.label, _OPTIMIZE_FUNCTIONS[spec.key])
+        for spec in registry.CHECKS
+        if spec.owner == 'optimize'
+    ]
 
 
 class LOWPOLY_OT_suggest_dense_vertices(bpy.types.Operator, LowPolyBaseOperator):

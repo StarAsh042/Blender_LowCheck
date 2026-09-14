@@ -29,27 +29,15 @@ from .optimize_operators import (
     _do_suggest_small_bevels,
 )
 from .. import utils
+from .. import registry
 
 
 # 全局存储检查结果
 check_results = {}
 
 
-# 该模块负责更新的计数属性（用于「清除结果」）
-COUNT_PROPERTIES = (
-    "ngon_count",
-    "overlapping_face_count",
-    "wrong_normal_count",
-    "non_manifold_edge_count",
-    "loose_vert_count",
-    "loose_edge_count",
-    "unwelded_vert_count",
-    "collinear_vert_count",
-    "degenerate_edge_count",
-    "degenerate_face_count",
-    "distorted_quad_count",
-    "concave_quad_count",
-)
+# 该模块负责更新的计数属性（用于「清除结果」）——由 registry 单一数据源派生
+COUNT_PROPERTIES = registry.count_properties('check')
 
 
 # 简写别名（保持本模块内调用简洁）
@@ -244,35 +232,38 @@ def _do_check_concave_quads(context):
     return _format_message("内凹四边面", total)
 
 
-#: 「运行全部检查」的执行清单（顺序与面板分组一致）
-_CHECK_PIPELINE = (
-    ("N-gon面检查", _do_check_ngon),
-    ("重叠面检查", _do_check_overlapping_faces),
-    ("错误法线检查（朝内）", _do_check_wrong_normals),
-    ("非流形边检查", _do_check_non_manifold_edges),
-    ("孤立几何体检查", _do_check_loose_geometry),
-    ("未焊接点检查", _do_check_unwelded_vertices),
-    ("共线顶点检查", _do_check_collinear_vertices),
-    ("密集顶点检测", _do_suggest_dense_vertices),
-    ("退化几何体检查", _do_check_degenerate_geometry),
-    ("非平面四边面检查", _do_check_distorted_quads),
-    ("内凹四边面检查", _do_check_concave_quads),
-    ("高面数物体检测", _do_suggest_high_poly_objects),
-    ("小倒角结构检测", _do_suggest_small_bevels),
-    ("朝下水平面检测", _do_suggest_downward_faces),
-    ("穿插物体检测", _do_suggest_intersecting_objects),
-    ("非均匀缩放物体检测", _do_suggest_non_uniform_scale),
-)
+#: 检测项键 → 检测函数（与 ``registry.CHECKS`` 的 ``key`` 一一对应）
+_CHECK_FUNCTIONS = {
+    'ngon_faces': _do_check_ngon,
+    'overlapping_faces': _do_check_overlapping_faces,
+    'wrong_normals': _do_check_wrong_normals,
+    'non_manifold_edges': _do_check_non_manifold_edges,
+    'loose_geometry': _do_check_loose_geometry,
+    'unwelded_vertices': _do_check_unwelded_vertices,
+    'collinear_vertices': _do_check_collinear_vertices,
+    'dense_vertices': _do_suggest_dense_vertices,
+    'degenerate_geometry': _do_check_degenerate_geometry,
+    'distorted_quads': _do_check_distorted_quads,
+    'concave_quads': _do_check_concave_quads,
+    'high_poly_objects': _do_suggest_high_poly_objects,
+    'small_bevels': _do_suggest_small_bevels,
+    'downward_faces': _do_suggest_downward_faces,
+    'intersecting_objects': _do_suggest_intersecting_objects,
+    'non_uniform_scale': _do_suggest_non_uniform_scale,
+}
 
 
 def get_check_pipeline():
     """
     返回「运行全部检查」的执行清单。
 
+    顺序完全由 ``registry.CHECKS`` 的声明顺序决定，与面板分组一致——
+    新增检测项时无需再手工维护这份清单。
+
     Returns:
         list[tuple[str, callable]]: (中文标签, 检测函数)
     """
-    return list(_CHECK_PIPELINE)
+    return [(spec.label, _CHECK_FUNCTIONS[spec.key]) for spec in registry.CHECKS]
 
 
 class LOWPOLY_OT_check_ngon_faces(bpy.types.Operator, LowPolyBaseOperator):

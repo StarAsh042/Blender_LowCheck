@@ -262,14 +262,14 @@ class LowPolyBaseOperator:
 
     def _clear_all_results(self, context):
         """清空全部检测结果与计数（由 clear_results 操作符调用）"""
+        from .. import registry
         from . import check_operators, optimize_operators
 
         check_operators.check_results.clear()
         optimize_operators.optimize_results.clear()
 
         props = context.scene.lowpoly
-        for count_name in (check_operators.COUNT_PROPERTIES
-                           + optimize_operators.COUNT_PROPERTIES):
+        for count_name in registry.count_properties():
             if hasattr(props, count_name):
                 setattr(props, count_name, 0)
 
