@@ -1,31 +1,18 @@
 """
 UI面板模块
 定义插件的用户界面 — 单面板四分组结构
+
+面板内容完全由 :mod:`registry` 驱动：分组、行标题、图标、检查/选择按钮、
+阈值滑杆与数量文案都来自单一数据源。新增检测项只需在 ``registry.CHECKS``
+中登记，无需改动本文件——这消除了「改了检测项却漏改面板」这类低级错误。
 """
 
 import bpy
-#: 汇总面板显示的问题总数所需的计数属性（随检测项增加而扩充）
-_SUMMARY_COUNTS = (
-    "ngon_count",
-    "overlapping_face_count",
-    "wrong_normal_count",
-    "non_manifold_edge_count",
-    "loose_vert_count",
-    "loose_edge_count",
-    "unwelded_vert_count",
-    "collinear_vert_count",
-    "dense_vert_count",
-    "degenerate_edge_count",
-    "degenerate_face_count",
-    "distorted_quad_count",
-    "concave_quad_count",
-    "high_poly_count",
-    "small_bevel_count",
-    "downward_face_count",
-    "intersecting_object_count",
-    "non_uniform_scale_count",
-)
 
+from . import registry
+
+
+# ── 辅助函数 ─────────────────────────────────────────────────────────
 
 def _draw_op_row(layout, check_op, select_op, count_text):
     """绘制 检查 / 选择 按钮 + 数量标签"""
@@ -35,10 +22,28 @@ def _draw_op_row(layout, check_op, select_op, count_text):
     row.label(text=count_text)
 
 
-def _count_problems(props):
-    """统计面板显示的问题总数"""
-    return sum(getattr(props, name, 0) for name in _SUMMARY_COUNTS)
+def _draw_threshold_row(layout, props, prop_name):
+    """
+    绘制阈值滑杆。
 
+    阈值本身的默认值与含义写在属性 description 中（悬浮可见）。
+    """
+    row = layout.row(align=True)
+    row.prop(props, prop_name)
+
+
+def _format_count(spec, props):
+    """按检测项声明的模板渲染数量文案"""
+    values = {name: getattr(props, name, 0) for name in spec.count_props}
+    return spec.count_template.format(**values)
+
+
+def _count_problems(props):
+    """统计面板显示的问题总数（计数属性来自 registry，避免清单漂移）"""
+    return sum(getattr(props, name, 0) for name in registry.count_properties())
+
+
+# ── 主面板 ────────────────────────────────────────────────────────────
 
 class LOWPOLY_PT_quality_panel(bpy.types.Panel):
     """
@@ -62,6 +67,31 @@ class LOWPOLY_PT_quality_panel(bpy.types.Panel):
             layout.label(text="插件未正确加载，请重新启用", icon='ERROR')
             return
 
+        self._draw_header(layout, props)
+        self._draw_summary(layout, props)
+
+        for group_key, group_label, group_icon in registry.GROUPS:
+            specs = registry.checks_in_group(group_key)
+            if not specs:
+                continue
+
+            layout.separator()
+            layout.label(text=group_label, icon=group_icon)
+
+            for spec in specs:
+                box = layout.box()
+                box.label(text=spec.label, icon=spec.icon)
+                _draw_op_row(
+                    box, spec.check_op, spec.select_op, _format_count(spec, props)
+                )
+                for threshold in spec.thresholds:
+                    _draw_threshold_row(box, props, threshold)
+
+    # ── 子区块 ──────────────────────────────────────────────────────
+
+    @staticmethod
+    def _draw_header(layout, props):
+        """顶部：运行范围 + 全局操作按钮"""
         box = layout.box()
         box.label(text="检测范围", icon='RESTRICT_SELECT_OFF')
         box.prop(props, "only_selected", toggle=True)
@@ -71,115 +101,24 @@ class LOWPOLY_PT_quality_panel(bpy.types.Panel):
         row = col.row(align=True)
         row.operator("lowpoly.clear_results", text="清除结果", icon='X')
 
+    @staticmethod
+    def _draw_summary(layout, props):
+        """结果汇总：让用户一眼看到整体质量状况"""
         total = _count_problems(props)
-        summary = layout.box()
-        srow = summary.row()
-        srow.alignment = 'LEFT'
+        box = layout.box()
+
+        row = box.row()
+        row.alignment = 'LEFT'
         if total > 0:
-            srow.label(text=f"问题总数: {total}", icon='ERROR')
+            row.label(text=f"问题总数: {total}", icon='ERROR')
         else:
-            srow.label(text="暂无检测结果", icon='INFO')
+            row.label(text="暂无检测结果", icon='INFO')
 
-        layout.separator()
-        layout.label(text="网格拓扑", icon='MESH_DATA')
-
-        box = layout.box()
-        box.label(text="N-gon面检查", icon='MESH_DATA')
-        _draw_op_row(box, "LOWPOLY_OT_check_ngon_faces", "LOWPOLY_OT_select_ngon_faces", f"数量: {props.ngon_count}")
-
-        box = layout.box()
-        box.label(text="重叠面检查", icon='FACESEL')
-        _draw_op_row(box, "LOWPOLY_OT_check_overlapping_faces", "LOWPOLY_OT_select_overlapping_faces", f"数量: {props.overlapping_face_count}")
-
-        box = layout.box()
-        box.label(text="错误法线检查（朝内）", icon='NORMALS_FACE')
-        _draw_op_row(box, "LOWPOLY_OT_check_wrong_normals", "LOWPOLY_OT_select_wrong_normals", f"数量: {props.wrong_normal_count}")
-
-        box = layout.box()
-        box.label(text="非流形边检查", icon='EDGESEL')
-        _draw_op_row(box, "LOWPOLY_OT_check_non_manifold_edges", "LOWPOLY_OT_select_non_manifold_edges", f"数量: {props.non_manifold_edge_count}")
-
-        box = layout.box()
-        box.label(text="孤立几何体检查", icon='OUTLINER_OB_MESH')
-        _draw_op_row(box, "LOWPOLY_OT_check_loose_geometry", "LOWPOLY_OT_select_loose_geometry", f"悬浮顶点: {props.loose_vert_count} 悬浮边: {props.loose_edge_count}")
-
-        layout.separator()
-        layout.label(text="顶点质量", icon='VERTEXSEL')
-
-        box = layout.box()
-        box.label(text="未焊接点检查", icon='VERTEXSEL')
-        _draw_op_row(box, "LOWPOLY_OT_check_unwelded_vertices", "LOWPOLY_OT_select_unwelded_vertices", f"数量: {props.unwelded_vert_count}")
-        row = box.row(align=True)
-        row.prop(props, "unwelded_threshold")
-
-        box = layout.box()
-        box.label(text="共线顶点检查", icon='VERTEXSEL')
-        _draw_op_row(box, "LOWPOLY_OT_check_collinear_vertices", "LOWPOLY_OT_select_collinear_vertices", f"数量: {props.collinear_vert_count}")
-        row = box.row(align=True)
-        row.prop(props, "collinear_threshold")
-
-        box = layout.box()
-        box.label(text="密集顶点检测", icon='VERTEXSEL')
-        _draw_op_row(box, "LOWPOLY_OT_suggest_dense_vertices", "LOWPOLY_OT_select_dense_vertices", f"数量: {props.dense_vert_count}")
-        row = box.row(align=True)
-        row.prop(props, "dense_distance_threshold")
-        row = box.row(align=True)
-        row.prop(props, "dense_count_threshold")
-
-        layout.separator()
-        layout.label(text="面质量", icon='FACESEL')
-
-        box = layout.box()
-        box.label(text="退化几何体检查", icon='MESH_DATA')
-        _draw_op_row(box, "LOWPOLY_OT_check_degenerate_geometry", "LOWPOLY_OT_select_degenerate_geometry", f"退化边: {props.degenerate_edge_count} 退化面: {props.degenerate_face_count}")
-        row = box.row(align=True)
-        row.prop(props, "degenerate_edge_threshold")
-        row = box.row(align=True)
-        row.prop(props, "degenerate_face_threshold")
-
-        box = layout.box()
-        box.label(text="非平面四边面检查", icon='MESH_DATA')
-        _draw_op_row(box, "LOWPOLY_OT_check_distorted_quads", "LOWPOLY_OT_select_distorted_quads", f"数量: {props.distorted_quad_count}")
-        row = box.row(align=True)
-        row.prop(props, "distortion_threshold")
-
-        box = layout.box()
-        box.label(text="内凹四边面检查", icon='MESH_DATA')
-        _draw_op_row(box, "LOWPOLY_OT_check_concave_quads", "LOWPOLY_OT_select_concave_quads", f"数量: {props.concave_quad_count}")
-
-        layout.separator()
-        layout.label(text="场景优化", icon='SCENE_DATA')
-
-        box = layout.box()
-        box.label(text="高面数物体检测", icon='MESH_DATA')
-        _draw_op_row(box, "LOWPOLY_OT_suggest_high_poly_objects", "LOWPOLY_OT_select_high_poly_objects", f"数量: {props.high_poly_count}")
-        row = box.row(align=True)
-        row.prop(props, "polycount_threshold")
-
-        box = layout.box()
-        box.label(text="小倒角结构检测", icon='FACESEL')
-        _draw_op_row(box, "LOWPOLY_OT_suggest_small_bevels", "LOWPOLY_OT_select_small_bevels", f"数量: {props.small_bevel_count}")
-        row = box.row(align=True)
-        row.prop(props, "bevel_width_threshold")
-
-        box = layout.box()
-        box.label(text="朝下水平面检测", icon='FACESEL')
-        _draw_op_row(box, "LOWPOLY_OT_suggest_downward_faces", "LOWPOLY_OT_select_downward_faces", f"数量: {props.downward_face_count}")
-        row = box.row(align=True)
-        row.prop(props, "downward_area_threshold")
-        row = box.row(align=True)
-        row.prop(props, "downward_angle_threshold")
-
-        box = layout.box()
-        box.label(text="穿插物体检测", icon='OBJECT_DATA')
-        _draw_op_row(box, "LOWPOLY_OT_suggest_intersecting_objects", "LOWPOLY_OT_select_intersecting_objects", f"数量: {props.intersecting_object_count}")
-        row = box.row(align=True)
-        row.prop(props, "intersect_overlap_threshold")
-
-        box = layout.box()
-        box.label(text="非均匀缩放物体检测", icon='OBJECT_DATA')
-        _draw_op_row(box, "LOWPOLY_OT_suggest_non_uniform_scale", "LOWPOLY_OT_select_non_uniform_scale", f"数量: {props.non_uniform_scale_count}")
-
+        hint = box.column(align=True)
+        hint.scale_y = 0.85
+        if props.only_selected:
+            hint.label(text="提示: 当前仅检测选中物体", icon='RESTRICT_SELECT_ON')
+        hint.label(text="提示: 未发现的项会清空其历史结果", icon='QUESTION')
 
 
 # ── 注册/注销 ──────────────────────────────────────────────────────────
