@@ -6,9 +6,10 @@
 from . import base
 from . import check_operators
 from . import optimize_operators
+from . import reset_operators
 
 #: 注册顺序（先注册的操作符可能被后面的模块引用）
-_MODULES = (base, check_operators, optimize_operators)
+_MODULES = (base, check_operators, optimize_operators, reset_operators)
 
 
 def register():

@@ -61,7 +61,7 @@ class LowPolyProperties(bpy.types.PropertyGroup):
         description="检测到的密集顶点数量"
     )
 
-    # ── 面质量：计数 ──────────────────────────────────────────
+    # ── 面质量：计数 ────────────────────────────────────────────
     degenerate_edge_count: bpy.props.IntProperty(
         name="退化边数",
         default=0,
@@ -143,6 +143,7 @@ class LowPolyProperties(bpy.types.PropertyGroup):
         precision=8,
         step=0.01
     )
+
     # 顶点质量阈值
     collinear_threshold: bpy.props.FloatProperty(
         name="共线阈值",
@@ -176,6 +177,7 @@ class LowPolyProperties(bpy.types.PropertyGroup):
         min=2,
         max=100
     )
+
     # 场景优化阈值
     polycount_threshold: bpy.props.IntProperty(
         name="面数阈值",
@@ -220,6 +222,35 @@ class LowPolyProperties(bpy.types.PropertyGroup):
     )
 
 
+#: 阈值参数的命名约定：所有阈值属性名以该后缀结尾，所有计数属性名以
+#: ``_count`` 结尾，二者互斥。该约定使默认值可以**自动派生**，避免
+#: 手工维护的默认值表与属性声明发生漂移（改了 ``default`` 却忘了同步字典）。
+THRESHOLD_SUFFIX = "_threshold"
+COUNT_SUFFIX = "_count"
+
+#: 阈值参数默认值 ``{参数名: 默认值}``，由 :func:`register` 依据属性声明
+#: 自动填充，供重置操作符与一致性测试使用。
+ALL_DEFAULTS = {}
+
+
+def _populate_defaults():
+    """
+    从已注册的属性组中读出全部阈值参数的默认值。
+
+    .. note::
+       必须在 ``register_class`` 之后调用——``bl_rna`` 只有在类注册后
+       才存在。
+
+    Returns:
+        dict: ``{参数名: 默认值}``（即 ``ALL_DEFAULTS`` 本身）
+    """
+    ALL_DEFAULTS.clear()
+    for prop in LowPolyProperties.bl_rna.properties:
+        if prop.identifier.endswith(THRESHOLD_SUFFIX):
+            ALL_DEFAULTS[prop.identifier] = prop.default
+    return ALL_DEFAULTS
+
+
 def register():
     """
     注册属性组。
@@ -231,6 +262,7 @@ def register():
     unregister()
     bpy.utils.register_class(LowPolyProperties)
     bpy.types.Scene.lowpoly = bpy.props.PointerProperty(type=LowPolyProperties)
+    _populate_defaults()
 
 
 def unregister():

@@ -24,12 +24,15 @@ def _draw_op_row(layout, check_op, select_op, count_text):
 
 def _draw_threshold_row(layout, props, prop_name):
     """
-    绘制阈值滑杆。
+    绘制阈值滑杆 + 重置按钮。
 
-    阈值本身的默认值与含义写在属性 description 中（悬浮可见）。
+    阈值本身的默认值与含义写在属性 description 中（悬浮可见），
+    重置按钮的悬浮提示会显示该参数的具体默认值。
     """
     row = layout.row(align=True)
     row.prop(props, prop_name)
+    reset_op = row.operator("lowpoly.reset_param", text="", icon='LOOP_BACK')
+    reset_op.param_name = prop_name
 
 
 def _format_count(spec, props):
@@ -100,6 +103,7 @@ class LOWPOLY_PT_quality_panel(bpy.types.Panel):
         col.operator("lowpoly.run_all_checks", text="运行全部检查", icon='FILE_REFRESH')
         row = col.row(align=True)
         row.operator("lowpoly.clear_results", text="清除结果", icon='X')
+        row.operator("lowpoly.reset_all_params", text="重置所有参数", icon='LOOP_BACK')
 
     @staticmethod
     def _draw_summary(layout, props):
