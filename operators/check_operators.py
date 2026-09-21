@@ -14,6 +14,7 @@ import bpy
 
 from .base import (
     LowPolyBaseOperator,
+    format_found,
     install_error_guard,
     run_pipeline,
     store_result,
@@ -66,11 +67,6 @@ def _collect_over_meshes(context, extractor):
     return data, total
 
 
-def _format_message(label, count):
-    """统一的「找到 N 个 X / 未找到 X」报告文案"""
-    return f"找到 {count} 个{label}" if count > 0 else f"未找到{label}"
-
-
 def _do_check_ngon(context):
     """执行 N-gon 检查，返回报告消息"""
     props = context.scene.lowpoly
@@ -79,7 +75,7 @@ def _do_check_ngon(context):
     )
     props.ngon_count = total
     _store_result(check_results, 'ngon_faces', data, 'FACE')
-    return _format_message("N-gon面", total)
+    return format_found("N-gon面", total)
 
 
 def _do_check_overlapping_faces(context):
@@ -88,7 +84,7 @@ def _do_check_overlapping_faces(context):
     data, total = _collect_over_meshes(context, utils.get_faces_sharing_all_edges)
     props.overlapping_face_count = total
     _store_result(check_results, 'overlapping_faces', data, 'FACE')
-    return _format_message("重叠面", total)
+    return format_found("重叠面", total)
 
 
 def _do_check_wrong_normals(context):
@@ -97,7 +93,7 @@ def _do_check_wrong_normals(context):
     data, total = _collect_over_meshes(context, utils.get_wrong_normal_faces)
     props.wrong_normal_count = total
     _store_result(check_results, 'wrong_normals', data, 'FACE')
-    return _format_message("法线错误的面", total)
+    return format_found("法线错误的面", total)
 
 
 def _do_check_non_manifold_edges(context):
@@ -106,7 +102,7 @@ def _do_check_non_manifold_edges(context):
     data, total = _collect_over_meshes(context, utils.get_non_manifold_edges)
     props.non_manifold_edge_count = total
     _store_result(check_results, 'non_manifold_edges', data, 'EDGE')
-    return _format_message("非流形边", total)
+    return format_found("非流形边", total)
 
 
 def _do_check_loose_geometry(context):
@@ -147,7 +143,7 @@ def _do_check_unwelded_vertices(context):
     )
     props.unwelded_vert_count = total
     _store_result(check_results, 'unwelded_vertices', data, 'VERT')
-    return _format_message("未焊接点", total)
+    return format_found("未焊接点", total)
 
 
 def _do_check_collinear_vertices(context):
@@ -159,7 +155,7 @@ def _do_check_collinear_vertices(context):
     )
     props.collinear_vert_count = total
     _store_result(check_results, 'collinear_vertices', data, 'VERT')
-    return _format_message("共线顶点", total)
+    return format_found("共线顶点", total)
 
 
 def _do_check_degenerate_geometry(context):
@@ -212,7 +208,7 @@ def _do_check_distorted_quads(context):
     data, total = _collect_over_meshes(context, extract)
     props.distorted_quad_count = total
     _store_result(check_results, 'distorted_quads', data, 'FACE')
-    return _format_message("非平面四边面", total)
+    return format_found("非平面四边面", total)
 
 
 def _do_check_concave_quads(context):
@@ -229,7 +225,7 @@ def _do_check_concave_quads(context):
     data, total = _collect_over_meshes(context, extract)
     props.concave_quad_count = total
     _store_result(check_results, 'concave_quads', data, 'FACE')
-    return _format_message("内凹四边面", total)
+    return format_found("内凹四边面", total)
 
 
 #: 检测项键 → 检测函数（与 ``registry.CHECKS`` 的 ``key`` 一一对应）

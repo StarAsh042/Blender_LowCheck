@@ -27,6 +27,23 @@ def store_result(store, key, data, element_type):
         store.pop(key, None)
 
 
+def format_found(label, count):
+    """
+    统一的「找到 N 个 X / 未找到 X」报告文案。
+
+    检测项分散在两个模块中，文案格式必须一致；集中到一处避免各写一份
+    后逐渐漂移（历史上曾出现一处写「找到」另一处写「检测到」）。
+
+    Args:
+        label: 检测项中文标签
+        count: 命中数量
+
+    Returns:
+        str: 报告文案
+    """
+    return f"找到 {count} 个{label}" if count > 0 else f"未找到{label}"
+
+
 def store_object_result(store, key, objects):
     """
     写入物体级检测结果；结果为空时移除旧键。

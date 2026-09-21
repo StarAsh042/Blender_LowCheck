@@ -10,6 +10,7 @@ import bpy
 
 from .base import (
     LowPolyBaseOperator,
+    format_found,
     install_error_guard,
     run_pipeline,
     store_object_result,
@@ -24,11 +25,6 @@ from .. import registry
 
 # 全局存储优化结果
 optimize_results = {}
-
-
-def _format_message(label, count):
-    """「检测到 N 个 X / 未检测到 X」报告文案"""
-    return f"检测到 {count} 个{label}" if count > 0 else f"未检测到{label}"
 
 
 # 该模块负责更新的计数属性（用于「清除结果」）——由 registry 单一数据源派生
@@ -53,7 +49,7 @@ def _do_suggest_dense_vertices(context):
 
     props.dense_vert_count = total_count
     store_result(optimize_results, 'dense_vertices', data, 'VERT')
-    return _format_message("密集顶点", total_count)
+    return format_found("密集顶点", total_count)
 
 
 def _do_suggest_high_poly_objects(context):
@@ -69,7 +65,7 @@ def _do_suggest_high_poly_objects(context):
 
     props.high_poly_count = len(high_poly_objects)
     store_object_result(optimize_results, 'high_poly_objects', high_poly_objects)
-    return _format_message("高面数物体", len(high_poly_objects))
+    return format_found("高面数物体", len(high_poly_objects))
 
 
 def _do_suggest_small_bevels(context):
@@ -89,7 +85,7 @@ def _do_suggest_small_bevels(context):
 
     props.small_bevel_count = total_count
     store_result(optimize_results, 'small_bevels', data, 'FACE')
-    return _format_message("小倒角结构", total_count)
+    return format_found("小倒角结构", total_count)
 
 
 def _do_suggest_downward_faces(context):
@@ -110,7 +106,7 @@ def _do_suggest_downward_faces(context):
 
     props.downward_face_count = total_count
     store_result(optimize_results, 'downward_faces', data, 'FACE')
-    return _format_message("朝下水平面", total_count)
+    return format_found("朝下水平面", total_count)
 
 
 def _do_suggest_intersecting_objects(context):
@@ -122,7 +118,7 @@ def _do_suggest_intersecting_objects(context):
 
     props.intersecting_object_count = len(intersecting_objects)
     store_object_result(optimize_results, 'intersecting_objects', intersecting_objects)
-    return _format_message("穿插物体", len(intersecting_objects))
+    return format_found("穿插物体", len(intersecting_objects))
 
 
 def _do_suggest_non_uniform_scale(context):
@@ -132,7 +128,7 @@ def _do_suggest_non_uniform_scale(context):
 
     props.non_uniform_scale_count = len(non_uniform)
     store_object_result(optimize_results, 'non_uniform_scale', non_uniform)
-    return _format_message("非均匀缩放物体", len(non_uniform))
+    return format_found("非均匀缩放物体", len(non_uniform))
 
 
 #: 检测项键 → 优化检测函数（与 ``registry.CHECKS`` 的 ``key`` 一一对应）
