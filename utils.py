@@ -649,8 +649,16 @@ def get_collinear_vertices(bm, threshold=0.01):
           则该顶点是直线上的多余点。
 
     判据: 两条**单位**边向量的点积绝对值 ``|cos θ|`` 表示方向的对齐程度：
-          完全共线时 ``|cos θ| = 1``，偏离直线时随之减小。与
-          ``1 - threshold`` 比较，认为偏离不超过阈值弧度即为共线。
+          完全共线时 ``|cos θ| = 1``；偏离直线 α 弧度时 ``|cos θ| = cos(α)``。
+          因此「偏离不超过 ``threshold`` 弧度」等价于
+          ``|cos θ| >= cos(threshold)``。
+
+    .. note::
+       旧实现写作 ``|cos θ| > 1 - threshold``。由于 ``cos(α) ≈ 1 - α²/2``
+       只在 α→0 时成立，该**线性近似**远比声明宽松：``threshold = 0.01``
+       时实际等价于 8.11°，而文档承诺的是 0.01 rad = 0.573°，灵敏度相差
+       约 14 倍；``threshold`` 接近 1.57 时 ``1 - threshold`` 降到 0.43，
+       判据恒真，所有度数为 2 的顶点都会被误报为共线。
 
     Args:
         bm: BMesh对象
@@ -662,6 +670,7 @@ def get_collinear_vertices(bm, threshold=0.01):
     if len(bm.verts) == 0:
         return []
 
+    cos_threshold = cos(max(threshold, 0.0))
     collinear_verts = []
 
     for vert in bm.verts:
@@ -682,7 +691,7 @@ def get_collinear_vertices(bm, threshold=0.01):
         vec2.normalize()
 
         # 方向相反即共线：|cos θ| 越接近 1，越接近一条直线
-        if abs(vec1.dot(vec2)) > 1.0 - threshold:
+        if abs(vec1.dot(vec2)) >= cos_threshold:
             collinear_verts.append(vert.index)
 
     return collinear_verts
