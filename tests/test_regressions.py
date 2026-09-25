@@ -19,6 +19,7 @@ import bmesh  # noqa: E402
 
 from Blender_LowCheck.utils import (  # noqa: E402
     get_collinear_vertices,
+    is_face_concave,
 )
 
 
@@ -55,6 +56,19 @@ class TestCollinearThresholdSemantics(unittest.TestCase):
         try:
             # threshold = 1.5 rad ≈ 86°：90° 的转角显然不该算共线
             self.assertEqual(get_collinear_vertices(bm, 1.5), [])
+        finally:
+            cleanup_test_data(bm, obj, mesh)
+
+
+class TestConcaveScaleIndependence(unittest.TestCase):
+    """回归：内凹判据曾把**带量纲**的叉积模与无量纲容差直接比较，
+    导致小尺寸面被静默漏判为凸。"""
+
+    def test_small_concave_quad_is_detected(self):
+        verts = [(0, 0, 0), (0.02, 0, 0), (0.01, 0.005, 0), (0, 0.02, 0)]
+        bm, obj, mesh = create_test_mesh("small_concave", verts, [(0, 1, 2, 3)])
+        try:
+            self.assertTrue(is_face_concave(bm.faces[0]))
         finally:
             cleanup_test_data(bm, obj, mesh)
 

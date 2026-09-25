@@ -848,6 +848,12 @@ def is_face_concave(face):
       - 非四边形 → 直接返回 False
       - 存在退化边（相邻顶点重合）→ 返回 False（退化面无法判断凹凸性）
 
+    尺度无关性: 判定过程中所有容差比较都使用**无量纲**量
+    （单位边向量的方向余弦、``|sin θ|``），因此同一形状在不同缩放下的
+    结论一致。唯一的例外是「退化边」判据 —— 它沿用与「退化边检查」相同的
+    **绝对**长度阈值 ``ZERO_THRESHOLD``（0.0001），因此边长小于该值的面
+    会被视为退化面并直接返回 False。
+
     Args:
         face: BMesh面对象
 
@@ -883,8 +889,13 @@ def is_face_concave(face):
 
         cross = edge1.cross(edge2)
 
-        # 叉积很小说明两条边几乎共线，该角的转向无法可靠判断，跳过
-        if cross.length < CONCAVITY_TOLERANCE:
+        # 退化角判据必须**无量纲**：``|cross| / (|e1| * |e2|)`` 等于两边的
+        # ``|sin θ|``，与模型尺度无关。若直接拿叉积的模（量纲为长度²）与
+        # 固定容差比较，小尺寸面会因叉积天然很小而被误判为「共线角」跳过，
+        # 大尺寸面则相反 —— 这正是本函数此前的问题。
+        sin_angle = cross.length / (edge1.length * edge2.length)
+        if sin_angle < CONCAVITY_TOLERANCE:
+            # 两条边几乎共线，该角的转向无法可靠判断，跳过
             continue
 
         cross.normalize()
