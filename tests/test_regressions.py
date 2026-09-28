@@ -19,6 +19,8 @@ import bmesh  # noqa: E402
 
 from Blender_LowCheck.utils import (  # noqa: E402
     get_collinear_vertices,
+    get_faces_sharing_all_edges,
+    get_unwelded_vertices,
     is_face_concave,
 )
 
@@ -69,6 +71,31 @@ class TestConcaveScaleIndependence(unittest.TestCase):
         bm, obj, mesh = create_test_mesh("small_concave", verts, [(0, 1, 2, 3)])
         try:
             self.assertTrue(is_face_concave(bm.faces[0]))
+        finally:
+            cleanup_test_data(bm, obj, mesh)
+
+
+class TestQuantizationBoundary(unittest.TestCase):
+    """回归：坐标量化分桶在相邻网格边界两侧会漏检
+    （未焊接点与重叠面检测同源缺陷）。"""
+
+    def test_unwelded_vertices_across_bucket_boundary(self):
+        # 两点相距 0.0002（< 阈值 0.001），但量化后落在相邻桶
+        verts = [(0.0004, 0, 0), (0.0006, 0, 0), (1, 0, 0), (1, 0, 0.5), (1, 0.5, 0)]
+        faces = [(0, 2, 3), (1, 2, 4)]
+        bm, obj, mesh = create_test_mesh("unwelded_edge_case", verts, faces)
+        try:
+            self.assertEqual(get_unwelded_vertices(bm, 0.001), [0, 1])
+        finally:
+            cleanup_test_data(bm, obj, mesh)
+
+    def test_overlapping_faces_across_bucket_boundary(self):
+        verts = [(0.0004, 0, 0), (1.0004, 0, 0), (0.0004, 1, 0),
+                 (0.0006, 0, 0), (1.0006, 0, 0), (0.0006, 1, 0)]
+        faces = [(0, 1, 2), (3, 4, 5)]
+        bm, obj, mesh = create_test_mesh("overlap_edge_case", verts, faces)
+        try:
+            self.assertEqual(sorted(get_faces_sharing_all_edges(bm, 0.001)), [0, 1])
         finally:
             cleanup_test_data(bm, obj, mesh)
 

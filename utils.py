@@ -335,9 +335,14 @@ def get_faces_sharing_all_edges(bm, threshold=0.0001):
     """
     检测重叠面（位置重合的面）
 
-    原理: 把每个顶点坐标按 ``threshold`` 量化到整数网格后取整做键，
-          再以「面的顶点量化键集合」作为面的键；键相同的面即顶点位置
-          完全重合。
+    原理: 先用 KDTree + 并查集把「彼此距离小于 ``threshold``」的顶点聚成
+          同一个**位置簇**，再以「面的顶点簇编号集合」作为键；键相同的面
+          即顶点位置完全重合。
+
+    说明: 旧实现把顶点坐标量化到 threshold 网格后取整做键，当两个重合点
+          恰好落在相邻网格边界两侧时会得到不同的键而被漏检（与未焊接点
+          检测曾出现的量化边界漏检同源）。位置簇方案不存在该问题，复杂度
+          仍为 O(V log V)。
 
     Args:
         bm: BMesh对象
@@ -349,16 +354,42 @@ def get_faces_sharing_all_edges(bm, threshold=0.0001):
     if len(bm.faces) == 0 or threshold <= 0.0:
         return []
 
-    def quantize(co):
-        return (
-            int(round(co.x / threshold)),
-            int(round(co.y / threshold)),
-            int(round(co.z / threshold)),
-        )
+    verts = list(bm.verts)
+    if not verts:
+        return []
 
+    index_of = {vert: i for i, vert in enumerate(verts)}
+
+    # ── 并查集（路径压缩） ────────────────────────────────────────
+    parent = list(range(len(verts)))
+
+    def find(x):
+        root = x
+        while parent[root] != root:
+            root = parent[root]
+        while parent[x] != root:
+            parent[x], x = root, parent[x]
+        return root
+
+    def union(a, b):
+        root_a, root_b = find(a), find(b)
+        if root_a != root_b:
+            parent[max(root_a, root_b)] = min(root_a, root_b)
+
+    kd = KDTree(len(verts))
+    for i, vert in enumerate(verts):
+        kd.insert(vert.co, i)
+    kd.balance()
+
+    for i, vert in enumerate(verts):
+        for _co, j, _dist in kd.find_range(vert.co, threshold):
+            if j != i:
+                union(i, j)
+
+    # ── 以「顶点位置簇编号集合」为键分组 ──────────────────────────
     face_keys = {}
     for face in bm.faces:
-        key = tuple(sorted(quantize(vert.co) for vert in face.verts))
+        key = tuple(sorted({find(index_of[vert]) for vert in face.verts}))
         face_keys.setdefault(key, []).append(face.index)
 
     overlapping_faces = []
@@ -597,9 +628,12 @@ def get_unwelded_vertices(bm, threshold=0.001):
     """
     检测未焊接的顶点（空间位置重合但没有被边连接）
 
-    原理: 把顶点坐标按 ``threshold`` 量化到整数网格后分桶，同一桶内的
-          顶点两两比较距离；距离小于阈值且二者之间不存在边时，视为
-          「未焊接」的重合点。
+    原理: 使用 KDTree 做半径查询找出距离小于阈值的顶点对，
+          若这些顶点之间不存在边，则说明是「未焊接」的重合点。
+
+    说明: 旧实现采用「量化坐标分桶」，当两个点恰好落在相邻格子
+          边界两侧时会漏检；KDTree 方案不存在该问题，复杂度
+          O(n log n)，同时省去了重复的 O(n²) 组内两两比较。
 
     Args:
         bm: BMesh对象
@@ -611,32 +645,25 @@ def get_unwelded_vertices(bm, threshold=0.001):
     if len(bm.verts) == 0 or threshold <= 0.0:
         return []
 
-    def quantize(co):
-        return (
-            int(round(co.x / threshold)),
-            int(round(co.y / threshold)),
-            int(round(co.z / threshold)),
-        )
-
-    buckets = {}
-    for vert in bm.verts:
-        buckets.setdefault(quantize(vert.co), []).append(vert)
+    verts = bm.verts
+    kd = KDTree(len(verts))
+    for i, vert in enumerate(verts):
+        kd.insert(vert.co, i)
+    kd.balance()
 
     unwelded = set()
-    for group in buckets.values():
-        if len(group) < 2:
-            continue
-        for i, vert in enumerate(group):
-            neighbors = None
-            for other in group[i + 1:]:
-                if (other.co - vert.co).length >= threshold:
-                    continue
-                if neighbors is None:
-                    neighbors = _vert_neighbors(vert)
-                if other in neighbors:
-                    continue
-                unwelded.add(vert.index)
-                unwelded.add(other.index)
+    for i, vert in enumerate(verts):
+        neighbors = None
+        for _co, j, _dist in kd.find_range(vert.co, threshold):
+            if j == i:
+                continue
+            if neighbors is None:
+                neighbors = _vert_neighbors(vert)
+            other = verts[j]
+            if other in neighbors:
+                continue
+            unwelded.add(vert.index)
+            unwelded.add(other.index)
 
     return sorted(unwelded)
 
