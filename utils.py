@@ -1022,6 +1022,30 @@ def get_downward_faces(bm, area_threshold=0.0, angle_threshold=5.0):
     return downward_faces
 
 
+def _world_aabb(obj):
+    """
+    计算物体的世界空间轴对齐包围盒（AABB）。
+
+    Args:
+        obj: 网格对象
+
+    Returns:
+        tuple: (最小角, 最大角) 两个 Vector
+    """
+    corners = [obj.matrix_world @ Vector(corner) for corner in obj.bound_box]
+    min_corner = Vector((
+        min(c.x for c in corners),
+        min(c.y for c in corners),
+        min(c.z for c in corners),
+    ))
+    max_corner = Vector((
+        max(c.x for c in corners),
+        max(c.y for c in corners),
+        max(c.z for c in corners),
+    ))
+    return min_corner, max_corner
+
+
 def _boxes_overlap(min1, max1, min2, max2, overlap_threshold, volume1, volume2):
     """
     判断两个 AABB 是否「足够重叠」。
@@ -1075,12 +1099,21 @@ def get_intersecting_objects(context, overlap_threshold=0.0):
        网格相交。这是刻意的性能取舍（逐三角求交代价极高）。把
        ``intersect_overlap_threshold`` 调大可以过滤掉「仅边界相切」的误报。
 
+    性能: 旧实现对**每一对**物体都重新计算两遍 8 个角的
+    ``matrix_world @ corner``（n 个物体共 O(n²) 次矩阵乘法），且用
+    ``list(set(...))`` 去重导致返回顺序不确定。现在：
+
+      * 每个物体的 AABB 只计算一次（O(n)）；
+      * 按最小 x 升序做**扫描剪枝**，内层一旦发现 ``min.x`` 已超过当前
+        ``max.x`` 即提前终止（x 轴不可能再重叠）；
+      * 按场景顺序去重输出，结果**确定可复现**。
+
     Args:
         context: Blender上下文对象
         overlap_threshold: 最小重叠比例阈值（0-1，0表示只要有接触就算穿插）
 
     Returns:
-        list: 穿插物体列表
+        list: 穿插物体列表（按场景顺序去重）
     """
     # 空网格（无顶点）的包围盒退化为原点处的零体积盒，会产生大量误报，直接排除
     objects = [
@@ -1090,32 +1123,42 @@ def get_intersecting_objects(context, overlap_threshold=0.0):
     if len(objects) < 2:
         return []
 
-    def world_box(obj):
-        corners = [obj.matrix_world @ Vector(corner) for corner in obj.bound_box]
-        min_corner = Vector((
-            min(c.x for c in corners),
-            min(c.y for c in corners),
-            min(c.z for c in corners),
-        ))
-        max_corner = Vector((
-            max(c.x for c in corners),
-            max(c.y for c in corners),
-            max(c.z for c in corners),
-        ))
+    # 物体刚被移动/缩放时，matrix_world 尚未随依赖图刷新，直接读取会得到
+    # **过期的变换**，从而算出错误的包围盒（后台模式与脚本调用尤其明显）。
+    # 这里主动刷新一次——相对后续的包围盒两两比较，代价可忽略。
+    view_layer = getattr(context, "view_layer", None)
+    if view_layer is not None:
+        try:
+            view_layer.update()
+        except Exception:  # noqa: BLE001 - 刷新失败不应阻断检测
+            pass
+
+    boxes = []
+    for obj in objects:
+        min_corner, max_corner = _world_aabb(obj)
         size = max_corner - min_corner
-        return min_corner, max_corner, size.x * size.y * size.z
+        boxes.append((min_corner, max_corner, size.x * size.y * size.z))
 
-    intersecting = []
-    for i, obj_a in enumerate(objects):
-        for obj_b in objects[i + 1:]:
-            min1, max1, volume1 = world_box(obj_a)
-            min2, max2, volume2 = world_box(obj_b)
-            if _boxes_overlap(min1, max1, min2, max2, overlap_threshold,
-                              volume1, volume2):
-                intersecting.append(obj_a)
-                intersecting.append(obj_b)
+    # 宽相位：按最小 x 升序，内层可提前终止
+    order = sorted(range(len(boxes)), key=lambda index: boxes[index][0].x)
 
-    return list(set(intersecting))
+    hit = [False] * len(boxes)
+    for pos in range(len(order)):
+        i = order[pos]
+        min1, max1, volume1 = boxes[i]
+        for next_pos in range(pos + 1, len(order)):
+            j = order[next_pos]
+            min2, max2, volume2 = boxes[j]
+            if min2.x > max1.x:
+                # 已按 min.x 升序，后面的物体在 x 轴上不可能再重叠
+                break
+            if hit[i] and hit[j]:
+                continue
+            if _boxes_overlap(min1, max1, min2, max2, overlap_threshold, volume1, volume2):
+                hit[i] = True
+                hit[j] = True
+
+    return [obj for index, obj in enumerate(objects) if hit[index]]
 
 
 def get_non_uniform_scale_objects(context):
