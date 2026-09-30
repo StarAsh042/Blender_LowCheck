@@ -182,9 +182,28 @@ class BMeshSession:
         self._objects_ctx = None
         self._objects_only_selected = None
 
+    def _release(self, key):
+        """释放并移除一个缓存条目，同时归还其占用的顶点预算"""
+        entry = self._cache.pop(key, None)
+        if entry is None:
+            return
+        _obj, bm, vertex_count = entry
+        try:
+            bm.free()
+        except Exception:  # pragma: no cover - 释放失败不应影响流程
+            pass
+        self._cached_verts -= vertex_count
+
     def get(self, obj):
         """
         获取物体的 BMesh 副本（优先从缓存取）。
+
+        .. note::
+           缓存键是对象名。Blender 中对象名唯一，但对象被删除后名字会被
+           新对象复用，因此命中时**必须用 ``is`` 校验对象身份**——仅比对
+           名字可能返回另一个物体的 BMesh。这里刻意不使用
+           ``as_pointer()``：内存地址在对象删除后同样会被复用，不能作为
+           稳定标识。
 
         Args:
             obj: 网格对象
@@ -196,7 +215,11 @@ class BMeshSession:
         key = obj.name
         entry = self._cache.get(key)
         if entry is not None:
-            return entry[1], True
+            cached_obj, cached_bm, _count = entry
+            if cached_obj is obj:
+                return cached_bm, True
+            # 名字被新对象复用：丢弃陈旧条目后重建，绝不返回错误数据
+            self._release(key)
 
         vertex_count = len(obj.data.vertices)
         over_budget = (
