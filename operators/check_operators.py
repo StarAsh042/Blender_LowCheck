@@ -183,7 +183,15 @@ def _do_check_degenerate_geometry(context):
     props.degenerate_edge_count = total_edges
     props.degenerate_face_count = total_faces
 
-    _store_result(check_results, 'degenerate_geometry', edge_data or face_data, 'EDGE')
+    # 选择时以边为主（退化边可同时定位其所属的退化面）；若本次检测根本没有
+    # 退化边，则退化为「选择退化面」。
+    # 注意: 元素类型必须与索引来源一致——旧实现固定写入 'EDGE'，于是当模型
+    # 只有退化面时，面索引会被当作边索引写进选择标志，用户点「选择」看到的
+    # 是一堆无关的边，真正的退化面反而选不中。
+    if edge_data:
+        _store_result(check_results, 'degenerate_geometry', edge_data, 'EDGE')
+    else:
+        _store_result(check_results, 'degenerate_geometry', face_data, 'FACE')
 
     parts = []
     if total_edges > 0:
