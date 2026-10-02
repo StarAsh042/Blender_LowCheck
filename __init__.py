@@ -18,11 +18,62 @@ bl_info = {
 
 import bpy
 
+from . import registry
 from . import utils
 from . import properties
 from . import operators
 from . import ui
 from .operators import check_operators, optimize_operators
+
+
+def reload_modules():
+    """
+    重新加载所有子模块并重新注册（仅用于开发调试）。
+
+    .. important::
+       必须遵循「先注销 → 再 reload → 再注册」的顺序。
+       ``importlib.reload`` 会在**同一模块命名空间中重新执行源码**，
+       从而重新创建全部类对象；而 ``bpy.types`` 中注册的仍然是旧类。
+       若只 reload 不注销，会留下三类问题：
+
+       * 旧类成为「已注册但模块中已无引用」的**孤儿**，之后停用无法清理；
+       * 再次启用时因 ``bl_idname`` 冲突而注册失败；
+       * ``operators.base._GUARD_ORIGINALS`` 被重建为空字典，异常守卫
+         「原始 execute」的映射随之丢失。
+
+    Returns:
+        list[str]: 已重新加载的模块名称
+    """
+    import importlib
+
+    from .operators import base as op_base
+    from .operators import check_operators as op_check
+    from .operators import optimize_operators as op_optimize
+    from .operators import reset_operators as op_reset
+
+    # 1) 先用「当前」的类对象干净注销（此时尚未 reload）
+    unregister()
+
+    # 2) 按依赖顺序重新加载：registry 无依赖故最先；
+    #    check_operators 依赖 optimize_operators，故排在它之后。
+    order = [
+        registry,
+        utils,
+        properties,
+        op_base,
+        op_reset,
+        op_optimize,
+        op_check,
+        operators,
+        ui,
+    ]
+    for module in order:
+        importlib.reload(module)
+
+    # 3) 注册 reload 后产生的新类
+    register()
+
+    return [module.__name__ for module in order]
 
 
 @bpy.app.handlers.persistent
