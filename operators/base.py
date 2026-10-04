@@ -327,6 +327,13 @@ def install_error_guard(cls):
     if original is None:
         return cls
 
+    if getattr(original, '_lowpoly_guarded', False):
+        # 类对象上的 execute 已经是守卫版本（例如模块被 importlib.reload
+        # 重建了 _GUARD_ORIGINALS，而类对象仍然存活）。此时若再包一层，
+        # 原始 execute 将永久丢失：uninstall 只能还原到「包装版」，
+        # 且异常会被重复记录。这里直接跳过，保持幂等。
+        return cls
+
     cls_name = cls.__name__
 
     def _guard(original_fn):
