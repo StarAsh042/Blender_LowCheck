@@ -1,0 +1,12 @@
+[package]
+name = "lowcheck_core"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.70"
+description = "低模质量检查插件的 Rust 内核"
+license = "MIT"
+publish = false
+
+[lib]
+name = "lowcheck_core"
+path = "src/lib.rs"
