@@ -1,0 +1,8 @@
+# clippy 门禁约定
+#
+# 本地与 CI 使用同一命令：
+#     cargo clippy --all-targets -- -D warnings
+#
+# `msrv` 与 Cargo.toml 的 `rust-version` 保持一致，clippy 会据此
+# 屏蔽「仅在更高版本可用」的建议，避免 MSRV 被悄悄抬高。
+msrv = "1.70"
