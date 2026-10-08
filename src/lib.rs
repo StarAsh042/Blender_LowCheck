@@ -230,7 +230,6 @@ mod tests {
     fn version_is_not_empty() {
         assert!(!version().is_empty());
     }
-
     #[test]
     fn cos_threshold_at_zero_is_one() {
         assert!((cos_threshold(0.0) - 1.0).abs() < 1e-12);
@@ -323,5 +322,120 @@ mod vertex_tests {
     fn dense_ignores_sparse_points() {
         let points: Vec<Point> = (0..6).map(|i| p(f64::from(i) * 10.0, 0.0, 0.0)).collect();
         assert!(dense_vertices(&points, 0.1, 5).is_empty());
+    }
+}
+
+/// Python 绑定层（PyO3 / abi3-py38）。
+///
+/// 约定：
+///
+/// * 入参一律用**扁平数组**（点用 `x, y, z` 依次排列），避免把 Rust 结构体
+///   暴露给 Python，边界只有一层。
+/// * 所有可能 panic 的路径都由 [`pybind::guard`] 兜住并映射为
+///   `PyRuntimeError`——**绝不让 panic 逃逸到 Python 解释器**。
+#[cfg(feature = "python")]
+mod pybind {
+    use crate::{vertex, Point};
+    use pyo3::exceptions::PyRuntimeError;
+    use pyo3::prelude::*;
+    use std::panic::{catch_unwind, AssertUnwindSafe};
+
+    /// 把扁平数组还原为点列表。
+    fn points_from_flat(flat: &[f64]) -> PyResult<Vec<Point>> {
+        if flat.len() % 3 != 0 {
+            return Err(PyRuntimeError::new_err(
+                "points 长度必须是 3 的倍数（x, y, z 依次排列）",
+            ));
+        }
+        Ok(flat
+            .chunks_exact(3)
+            .map(|c| Point::new(c[0], c[1], c[2]))
+            .collect())
+    }
+
+    /// 把扁平数组还原为边列表。
+    fn edges_from_flat(flat: &[usize]) -> PyResult<Vec<(usize, usize)>> {
+        if flat.len() % 2 != 0 {
+            return Err(PyRuntimeError::new_err(
+                "edges 长度必须是 2 的倍数（起点, 终点 依次排列）",
+            ));
+        }
+        Ok(flat.chunks_exact(2).map(|c| (c[0], c[1])).collect())
+    }
+
+    /// 捕获 panic 并映射为 Python 异常。
+    fn guard<F, T>(f: F) -> PyResult<T>
+    where
+        F: FnOnce() -> PyResult<T>,
+    {
+        match catch_unwind(AssertUnwindSafe(f)) {
+            Ok(value) => value,
+            Err(_) => Err(PyRuntimeError::new_err(
+                "lowcheck_core 内部错误（panic 已被捕获，未逃逸到 Python）",
+            )),
+        }
+    }
+
+    /// 内核版本号。
+    #[pyfunction]
+    fn kernel_version() -> &'static str {
+        crate::version()
+    }
+
+    /// 共线顶点检测。
+    #[pyfunction]
+    fn collinear_vertices(
+        points: Vec<f64>,
+        edges: Vec<usize>,
+        boundary: Vec<bool>,
+        threshold: f64,
+    ) -> PyResult<Vec<usize>> {
+        guard(|| {
+            let pts = points_from_flat(&points)?;
+            let eds = edges_from_flat(&edges)?;
+            Ok(vertex::collinear_vertices(&pts, &eds, &boundary, threshold))
+        })
+    }
+
+    /// 未焊接点检测。
+    #[pyfunction]
+    fn unwelded_vertices(
+        points: Vec<f64>,
+        edges: Vec<usize>,
+        threshold: f64,
+    ) -> PyResult<Vec<usize>> {
+        guard(|| {
+            let pts = points_from_flat(&points)?;
+            let eds = edges_from_flat(&edges)?;
+            Ok(vertex::unwelded_vertices(&pts, &eds, threshold))
+        })
+    }
+
+    /// 密集顶点检测。
+    #[pyfunction]
+    fn dense_vertices(
+        points: Vec<f64>,
+        distance_threshold: f64,
+        count_threshold: usize,
+    ) -> PyResult<Vec<usize>> {
+        guard(|| {
+            let pts = points_from_flat(&points)?;
+            Ok(vertex::dense_vertices(
+                &pts,
+                distance_threshold,
+                count_threshold,
+            ))
+        })
+    }
+
+    /// 扩展模块入口。
+    #[pymodule]
+    fn lowcheck_core(m: &Bound<'_, PyModule>) -> PyResult<()> {
+        m.add("__version__", crate::version())?;
+        m.add_function(wrap_pyfunction!(kernel_version, m)?)?;
+        m.add_function(wrap_pyfunction!(collinear_vertices, m)?)?;
+        m.add_function(wrap_pyfunction!(unwelded_vertices, m)?)?;
+        m.add_function(wrap_pyfunction!(dense_vertices, m)?)?;
+        Ok(())
     }
 }

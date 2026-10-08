@@ -10,3 +10,14 @@ publish = false
 [lib]
 name = "lowcheck_core"
 path = "src/lib.rs"
+# cdylib 供 Python 以扩展模块形式加载；rlib 供 Rust 侧测试与集成使用
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+pyo3 = { version = "0.23", features = ["abi3-py38"], optional = true }
+
+[features]
+default = ["python"]
+# 构建 Blender 扩展时启用：使用 CPython 稳定 ABI（abi3-py38），
+# 不链接 libpython，Python 符号由宿主解释器在加载时提供。
+python = ["dep:pyo3", "pyo3/extension-module"]
