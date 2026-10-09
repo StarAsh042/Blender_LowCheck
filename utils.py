@@ -7,6 +7,8 @@ import bpy
 import bmesh
 import traceback
 from contextlib import contextmanager
+import importlib.util
+import os
 from mathutils import Vector, geometry
 from math import radians, cos
 from mathutils.kdtree import KDTree
@@ -354,6 +356,79 @@ def create_bmesh_copy(obj):
     return _build_bmesh(obj.data)
 
 
+# ---------------------------------------------------------------------------
+# Rust 内核（可选）
+# ---------------------------------------------------------------------------
+#: Rust 内核模块；未构建扩展时为 None，此时全部算法走纯 Python 回退路径。
+_KERNEL = None
+
+
+def _load_kernel():
+    """
+    尝试加载 Rust 内核扩展模块 ``lowcheck_core``。
+
+    扩展模块与插件同级（由 ``tools/build_rust.py`` 产出）。这里按**文件路径**
+    直接加载，避免修改 ``sys.path`` 而影响宿主环境。
+
+    Returns:
+        模块对象；未找到或加载失败时返回 None
+    """
+    global _KERNEL
+    if _KERNEL is not None:
+        return _KERNEL
+
+    here = os.path.dirname(os.path.abspath(__file__))
+    for suffix in (".pyd", ".so", ".dylib"):
+        path = os.path.join(here, "lowcheck_core" + suffix)
+        if not os.path.isfile(path):
+            continue
+        try:
+            spec = importlib.util.spec_from_file_location("lowcheck_core", path)
+            if spec is None or spec.loader is None:
+                continue
+            module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(module)
+        except Exception as exc:  # noqa: BLE001 - 内核不可用时必须能回退
+            log_exception(f"加载 Rust 内核失败（{path}）", exc)
+            continue
+        _KERNEL = module
+        return _KERNEL
+    return None
+
+
+def kernel_available():
+    """返回 Rust 内核是否可用。"""
+    return _load_kernel() is not None
+
+
+def _vertex_kernel_inputs(bm):
+    """
+    把 BMesh 摊平为内核所需的扁平数组。
+
+    Args:
+        bm: BMesh 对象
+
+    Returns:
+        tuple: (points, edges, boundary) —— 点按 ``x, y, z`` 依次排列，
+               边按 ``起点索引, 终点索引`` 依次排列
+    """
+    bm.verts.ensure_lookup_table()
+    bm.edges.ensure_lookup_table()
+    bm.verts.index_update()
+    bm.edges.index_update()
+
+    points = []
+    for vert in bm.verts:
+        points.extend((vert.co.x, vert.co.y, vert.co.z))
+
+    edges = []
+    for edge in bm.edges:
+        edges.extend((edge.verts[0].index, edge.verts[1].index))
+
+    boundary = [bool(vert.is_boundary) for vert in bm.verts]
+    return points, edges, boundary
+
+
 def get_faces_sharing_all_edges(bm, threshold=0.0001):
     """
     检测重叠面（位置重合的面）
@@ -647,7 +722,7 @@ def get_loose_geometry(bm):
     return loose_verts, loose_edges
 
 
-def get_unwelded_vertices(bm, threshold=0.001):
+def _unwelded_vertices_py(bm, threshold=0.001):
     """
     检测未焊接的顶点（空间位置重合但没有被边连接）
 
@@ -691,7 +766,35 @@ def get_unwelded_vertices(bm, threshold=0.001):
     return sorted(unwelded)
 
 
-def get_collinear_vertices(bm, threshold=0.01):
+def get_unwelded_vertices(bm, threshold=0.001):
+    """
+    检测未焊接的顶点（空间位置重合但没有被边连接）。
+
+    优先调用 Rust 内核；内核不可用或调用失败时回退到
+    :func:`_unwelded_vertices_py`。
+
+    Args:
+        bm: BMesh对象
+        threshold: 距离阈值（必须大于 0，否则直接返回空结果）
+
+    Returns:
+        list: 未焊接顶点的索引列表（升序、去重）
+    """
+    if len(bm.verts) == 0 or threshold <= 0.0:
+        return []
+
+    kernel = _load_kernel()
+    if kernel is not None:
+        try:
+            points, edges, _boundary = _vertex_kernel_inputs(bm)
+            return list(kernel.unwelded_vertices(points, edges, threshold))
+        except Exception as exc:  # noqa: BLE001 - 内核异常不应中断检测
+            log_exception("Rust 内核未焊接点检测失败，回退到纯 Python 实现", exc)
+
+    return _unwelded_vertices_py(bm, threshold)
+
+
+def _collinear_vertices_py(bm, threshold=0.01):
     """
     检测共线顶点（三点共线）
 
@@ -747,6 +850,34 @@ def get_collinear_vertices(bm, threshold=0.01):
     return collinear_verts
 
 
+def get_collinear_vertices(bm, threshold=0.01):
+    """
+    检测共线顶点（三点共线）。
+
+    优先调用 Rust 内核；内核不可用或调用失败时回退到
+    :func:`_collinear_vertices_py`。
+
+    Args:
+        bm: BMesh对象
+        threshold: 允许偏离直线的最大角度（弧度），越小越严格
+
+    Returns:
+        list: 共线顶点的索引列表
+    """
+    if len(bm.verts) == 0:
+        return []
+
+    kernel = _load_kernel()
+    if kernel is not None:
+        try:
+            points, edges, boundary = _vertex_kernel_inputs(bm)
+            return list(kernel.collinear_vertices(points, edges, boundary, threshold))
+        except Exception as exc:  # noqa: BLE001 - 内核异常不应中断检测
+            log_exception("Rust 内核共线检测失败，回退到纯 Python 实现", exc)
+
+    return _collinear_vertices_py(bm, threshold)
+
+
 def _vert_neighbors(vert):
     """
     返回与顶点通过边直接相连的邻居顶点集合。
@@ -760,7 +891,7 @@ def _vert_neighbors(vert):
     return {edge.other_vert(vert) for edge in vert.link_edges}
 
 
-def get_dense_vertices(bm, distance_threshold=0.1, count_threshold=5):
+def _dense_vertices_py(bm, distance_threshold=0.1, count_threshold=5):
     """
     检测密集顶点
 
@@ -794,6 +925,35 @@ def get_dense_vertices(bm, distance_threshold=0.1, count_threshold=5):
             dense_verts.append(vert.index)
 
     return dense_verts
+
+
+def get_dense_vertices(bm, distance_threshold=0.1, count_threshold=5):
+    """
+    检测密集顶点。
+
+    优先调用 Rust 内核；内核不可用或调用失败时回退到
+    :func:`_dense_vertices_py`。
+
+    Args:
+        bm: BMesh对象
+        distance_threshold: 搜索半径
+        count_threshold: 顶点数量阈值
+
+    Returns:
+        list: 密集顶点的索引列表
+    """
+    if len(bm.verts) == 0:
+        return []
+
+    kernel = _load_kernel()
+    if kernel is not None:
+        try:
+            points, _edges, _boundary = _vertex_kernel_inputs(bm)
+            return list(kernel.dense_vertices(points, distance_threshold, count_threshold))
+        except Exception as exc:  # noqa: BLE001 - 内核异常不应中断检测
+            log_exception("Rust 内核密集顶点检测失败，回退到纯 Python 实现", exc)
+
+    return _dense_vertices_py(bm, distance_threshold, count_threshold)
 
 
 def get_zero_length_edges(bm, threshold=0.0001):
