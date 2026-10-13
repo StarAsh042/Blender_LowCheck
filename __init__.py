@@ -2,13 +2,16 @@
 低模质量检查插件 (Lowpoly Check)
 作者: StarAsh042
 功能: 检查低多边形模型质量，覆盖网格拓扑、顶点质量、面质量、场景优化四大维度
+
+版本策略: 自 1.0.0 起遵循语义化版本（主版本 = 不兼容变更，
+次版本 = 兼容新增，修订 = 兼容修复）。
 """
 
 
 bl_info = {
     "name": "低模质量检查 (Lowpoly Check)",
     "author": "StarAsh042",
-    "version": (0, 9, 0),
+    "version": (1, 0, 0),
     "blender": (3, 4, 0),
     "location": "View3D > Sidebar > Lowpoly Tools",
     "description": "检查低多边形模型质量，覆盖网格拓扑、顶点质量、面质量、场景优化四大维度",
