@@ -7,6 +7,7 @@ import bpy
 import bmesh
 import traceback
 from contextlib import contextmanager
+import hashlib
 import importlib.util
 import os
 import shutil
@@ -369,7 +370,7 @@ _KERNEL = None
 _KERNEL_CACHE_DIRNAME = "lowcheck_kernel_cache"
 
 
-def _kernel_cache_dir():
+def _kernel_cache_dir(create=True):
     """
     返回内核副本的缓存目录——**必须在插件目录之外**。
 
@@ -384,23 +385,56 @@ def _kernel_cache_dir():
     解法：把扩展复制到插件目录之外再从副本加载。插件目录里的原件从未被
     加载，于是可以被正常删除。
 
+    Args:
+        create: 目录不存在时是否创建。**清理缓存时必须传 ``False``**，
+            否则会「为了删除而先把目录建出来」。
+
     Returns:
         str: 缓存目录路径（创建失败时退化为系统临时目录）
     """
     try:
         return bpy.utils.user_resource(
-            'SCRIPTS', path=_KERNEL_CACHE_DIRNAME, create=True)
+            'SCRIPTS', path=_KERNEL_CACHE_DIRNAME, create=create)
     except Exception:  # noqa: BLE001 - 拿不到用户目录时退化为临时目录
         fallback = os.path.join(tempfile.gettempdir(), _KERNEL_CACHE_DIRNAME)
-        os.makedirs(fallback, exist_ok=True)
+        if create:
+            os.makedirs(fallback, exist_ok=True)
         return fallback
+
+
+def _same_file_content(first, second):
+    """
+    判断两个文件内容是否一致（先比大小，再比 SHA256）。
+
+    .. important::
+       **不能用 mtime 判断。** ZIP 内的扩展模块时间戳是**构建时间**，而缓存
+       副本的 mtime 是首次复制时的当前时间——于是升级插件后，新内核的 mtime
+       反而**早于**缓存，``源 > 缓存`` 恒为 False，永远复用旧内核。实测：
+       内容已变更但缓存哈希不变。
+
+    Args:
+        first: 文件路径
+        second: 文件路径
+
+    Returns:
+        bool: 内容一致返回 True；任一文件不可读时返回 False
+    """
+    try:
+        if os.path.getsize(first) != os.path.getsize(second):
+            return False
+        with open(first, 'rb') as fa, open(second, 'rb') as fb:
+            return (hashlib.sha256(fa.read()).digest()
+                    == hashlib.sha256(fb.read()).digest())
+    except OSError:
+        return False
 
 
 def _ensure_kernel_copy(source_path):
     """
     把扩展模块复制到插件目录之外，返回可加载的副本路径。
 
-    仅在副本缺失或源文件更新时才复制，避免每次启动都做无谓的磁盘 IO。
+    仅在副本缺失、或**内容与源文件不一致**时才复制（判据见
+    :func:`_same_file_content`），避免每次启动都做无谓的磁盘 IO。
 
     Args:
         source_path: 插件目录内的扩展模块路径
@@ -410,13 +444,51 @@ def _ensure_kernel_copy(source_path):
     """
     target = os.path.join(_kernel_cache_dir(), os.path.basename(source_path))
     try:
-        if (not os.path.isfile(target)
-                or os.path.getmtime(source_path) > os.path.getmtime(target)):
+        if not os.path.isfile(target) or not _same_file_content(source_path, target):
             shutil.copy2(source_path, target)
         return target
     except OSError as exc:
         log_exception(f"复制内核到缓存目录失败（{target}）", exc)
         return None
+
+
+def cleanup_kernel_cache():
+    """
+    尽力清理内核缓存目录（插件注销时调用）。
+
+    .. note::
+       内核**已被加载**时，缓存里的扩展文件正被进程锁定，Windows 会拒绝
+       删除（``WinError 5``）——这是操作系统的硬限制，不是可以绕过的 bug。
+       因此本函数是「尽力而为」：能删的删掉、删不掉的留下，**不抛异常**。
+
+       实际效果：用户若从未跑过检测（内核未加载），缓存可被完全清除；
+       若已跑过，则留下一个约 250KB 的 ``.pyd``，需重启 Blender 后手动删除。
+    """
+    cache_dir = _kernel_cache_dir(create=False)
+    if not cache_dir or not os.path.isdir(cache_dir):
+        return
+
+    try:
+        names = os.listdir(cache_dir)
+    except OSError:
+        return
+
+    leftover = []
+    for name in names:
+        path = os.path.join(cache_dir, name)
+        try:
+            if os.path.isdir(path):
+                shutil.rmtree(path)
+            else:
+                os.unlink(path)
+        except OSError:
+            leftover.append(name)
+
+    if not leftover:
+        try:
+            os.rmdir(cache_dir)
+        except OSError:
+            pass
 
 
 def _load_kernel():
