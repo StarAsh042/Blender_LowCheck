@@ -1172,16 +1172,53 @@ def get_small_bevels(bm, width_threshold=0.01):
     return bevel_faces
 
 
-def get_downward_faces(bm, area_threshold=0.0, angle_threshold=5.0):
+def _face_area(face, matrix_world=None):
+    """
+    计算面的面积。
+
+    Args:
+        face: BMesh 面
+        matrix_world: 物体的世界变换矩阵。传入后返回**世界空间**面积
+            （把顶点变换到世界空间再累加）；为 ``None`` 时返回局部空间面积。
+
+    Returns:
+        float: 面积
+    """
+    if matrix_world is None:
+        return face.calc_area()
+
+    coords = [matrix_world @ vert.co for vert in face.verts]
+    if len(coords) < 3:
+        return 0.0
+
+    # 扇形三角化：以首顶点为基点，累加相邻两边叉积得到向量面积
+    origin = coords[0]
+    total = Vector((0.0, 0.0, 0.0))
+    for i in range(1, len(coords) - 1):
+        total += (coords[i] - origin).cross(coords[i + 1] - origin)
+    return total.length * 0.5
+
+
+def get_downward_faces(bm, area_threshold=0.0, angle_threshold=5.0, matrix_world=None):
     """
     检测朝下的水平面
 
-    原理: 面的法线朝下（与Z轴负方向点积接近1）表示朝下
+    原理: 面的法线在**世界空间**朝下（与世界 Z 轴负方向点积接近 1）表示朝下。
+
+    .. note::
+       BMesh 由 ``obj.data`` 构建，其 ``face.normal`` 与 ``face.calc_area()``
+       都是**局部空间**的量。物体一旦被旋转或缩放，两者都与世界中的实际
+       朝向、可见尺寸脱钩，判定会同时产生两类错误：漏检（世界空间朝下却
+       报不出）与误报（世界空间不朝下却报出）。实测：单位立方体绕 X 轴
+       旋转 90° 后，旧实现报出的是世界法线为 ``(0, 1, 0)`` 的侧面，而真正
+       朝下的面（世界法线 ``(0, 0, -1)``）被漏掉。
 
     Args:
         bm: BMesh对象
-        area_threshold: 最小面积阈值，0表示全部检测
+        area_threshold: 最小面积阈值（**世界空间**面积），0表示全部检测
         angle_threshold: 角度阈值（度），面法线与竖直向下方向的夹角小于此值视为朝下水平面
+        matrix_world: 物体的世界变换矩阵。传入后按世界空间判定；为 ``None``
+            时退化为局部空间（仅适用于物体无旋转、无缩放的场合）。
 
     Returns:
         list: 朝下面索引列表
@@ -1195,11 +1232,20 @@ def get_downward_faces(bm, area_threshold=0.0, angle_threshold=5.0):
     # 将角度阈值转换为余弦值阈值
     cos_threshold = cos(radians(angle_threshold))
 
+    # 法线必须用「逆转置矩阵」变换：只有它在非均匀缩放下仍能给出正确的
+    # 法线方向（直接用 3x3 部分会让法线随缩放发生偏斜）。
+    normal_matrix = None
+    if matrix_world is not None:
+        normal_matrix = matrix_world.to_3x3().inverted_safe().transposed()
+
     for face in bm.faces:
+        normal = face.normal
+        if normal_matrix is not None:
+            normal = (normal_matrix @ normal).normalized()
         # 法线与朝下方向的点积接近1，表示朝下（不使用abs，避免检测到朝上的面）
-        dot_product = face.normal.dot(down)
+        dot_product = normal.dot(down)
         if dot_product > cos_threshold:  # 严格朝下
-            if area_threshold == 0 or face.calc_area() >= area_threshold:
+            if area_threshold == 0 or _face_area(face, matrix_world) >= area_threshold:
                 downward_faces.append(face.index)
 
     return downward_faces

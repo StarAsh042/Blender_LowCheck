@@ -94,12 +94,24 @@ def _do_suggest_downward_faces(context):
     area = props.downward_area_threshold
     angle = props.downward_angle_threshold
 
+    # 朝向按世界空间判定，因此必须确保读到最新的 matrix_world：物体刚被
+    # 旋转/缩放时该矩阵尚未随依赖图刷新（脚本与后台模式尤其明显），直接
+    # 读取会拿到过期变换，判定结果随之出错。
+    view_layer = getattr(context, "view_layer", None)
+    if view_layer is not None:
+        try:
+            view_layer.update()
+        except Exception:  # noqa: BLE001 - 刷新失败不应阻断检测
+            pass
+
     data = {}
     total_count = 0
 
     for obj in utils.get_target_mesh_objects(context):
         with utils.bmesh_from_object(obj) as bm:
-            downward_faces = utils.get_downward_faces(bm, area, angle)
+            downward_faces = utils.get_downward_faces(
+                bm, area, angle, matrix_world=obj.matrix_world
+            )
             if downward_faces:
                 data[obj] = downward_faces
                 total_count += len(downward_faces)
