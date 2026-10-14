@@ -9,6 +9,8 @@ import traceback
 from contextlib import contextmanager
 import importlib.util
 import os
+import shutil
+import tempfile
 from mathutils import Vector, geometry
 from math import radians, cos
 from mathutils.kdtree import KDTree
@@ -363,12 +365,72 @@ def create_bmesh_copy(obj):
 _KERNEL = None
 
 
+#: 内核副本的缓存目录名（位于 Blender 用户 scripts 目录下，**与插件目录分离**）
+_KERNEL_CACHE_DIRNAME = "lowcheck_kernel_cache"
+
+
+def _kernel_cache_dir():
+    """
+    返回内核副本的缓存目录——**必须在插件目录之外**。
+
+    为什么需要它：Windows 上**已加载的 .pyd 无法删除**（``os.unlink`` 报
+    ``WinError 5 拒绝访问``），而 CPython **从不卸载扩展模块**——即使把它
+    从 ``sys.modules`` 移除也无效（已实测：导入前可删、导入后不可删、
+    移除引用后仍不可删）。
+
+    而 Blender 卸载插件时会 ``shutil.rmtree`` 整个插件目录。因此只要扩展是
+    从插件目录里加载的，用户就会**永远卸载不掉本插件**（报 PermissionError）。
+
+    解法：把扩展复制到插件目录之外再从副本加载。插件目录里的原件从未被
+    加载，于是可以被正常删除。
+
+    Returns:
+        str: 缓存目录路径（创建失败时退化为系统临时目录）
+    """
+    try:
+        return bpy.utils.user_resource(
+            'SCRIPTS', path=_KERNEL_CACHE_DIRNAME, create=True)
+    except Exception:  # noqa: BLE001 - 拿不到用户目录时退化为临时目录
+        fallback = os.path.join(tempfile.gettempdir(), _KERNEL_CACHE_DIRNAME)
+        os.makedirs(fallback, exist_ok=True)
+        return fallback
+
+
+def _ensure_kernel_copy(source_path):
+    """
+    把扩展模块复制到插件目录之外，返回可加载的副本路径。
+
+    仅在副本缺失或源文件更新时才复制，避免每次启动都做无谓的磁盘 IO。
+
+    Args:
+        source_path: 插件目录内的扩展模块路径
+
+    Returns:
+        str | None: 副本路径；复制失败时返回 None（调用方退化为原地加载）
+    """
+    target = os.path.join(_kernel_cache_dir(), os.path.basename(source_path))
+    try:
+        if (not os.path.isfile(target)
+                or os.path.getmtime(source_path) > os.path.getmtime(target)):
+            shutil.copy2(source_path, target)
+        return target
+    except OSError as exc:
+        log_exception(f"复制内核到缓存目录失败（{target}）", exc)
+        return None
+
+
 def _load_kernel():
     """
     尝试加载 Rust 内核扩展模块 ``lowcheck_core``。
 
     扩展模块与插件同级（由 ``tools/build_rust.py`` 产出）。这里按**文件路径**
     直接加载，避免修改 ``sys.path`` 而影响宿主环境。
+
+    .. important::
+       加载的是复制到插件目录**之外**的副本，而不是插件目录里的原件——
+       否则该文件会被进程锁定，导致插件永远无法被卸载（见
+       :func:`_kernel_cache_dir` 的说明）。副本复制失败时退化为原地加载，
+       功能不受影响，只是重新出现「卸载前需重启 Blender」的限制。
 
     Returns:
         模块对象；未找到或加载失败时返回 None
@@ -379,9 +441,10 @@ def _load_kernel():
 
     here = os.path.dirname(os.path.abspath(__file__))
     for suffix in (".pyd", ".so", ".dylib"):
-        path = os.path.join(here, "lowcheck_core" + suffix)
-        if not os.path.isfile(path):
+        source = os.path.join(here, "lowcheck_core" + suffix)
+        if not os.path.isfile(source):
             continue
+        path = _ensure_kernel_copy(source) or source
         try:
             spec = importlib.util.spec_from_file_location("lowcheck_core", path)
             if spec is None or spec.loader is None:
