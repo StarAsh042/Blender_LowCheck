@@ -17,6 +17,7 @@ if PARENT_DIR not in sys.path:
 import bpy  # noqa: E402
 import bmesh  # noqa: E402
 
+from Blender_LowCheck import utils  # noqa: E402
 from Blender_LowCheck.utils import (  # noqa: E402
     get_collinear_vertices,
     get_faces_sharing_all_edges,
@@ -96,6 +97,50 @@ class TestQuantizationBoundary(unittest.TestCase):
         bm, obj, mesh = create_test_mesh("overlap_edge_case", verts, faces)
         try:
             self.assertEqual(sorted(get_faces_sharing_all_edges(bm, 0.001)), [0, 1])
+        finally:
+            cleanup_test_data(bm, obj, mesh)
+
+
+#: 单位立方体（外法线朝外），供需要闭合网格的回归用例复用
+CUBE_VERTS = [(-1, -1, -1), (1, -1, -1), (1, 1, -1), (-1, 1, -1),
+              (-1, -1, 1), (1, -1, 1), (1, 1, 1), (-1, 1, 1)]
+CUBE_FACES = [(0, 3, 2, 1), (4, 5, 6, 7), (0, 1, 5, 4),
+              (1, 2, 6, 5), (2, 3, 7, 6), (3, 0, 4, 7)]
+
+
+class TestSelectionClearsResidualSubElements(unittest.TestCase):
+    """回归：``_clear_mesh_selection`` 曾只清目标元素类型，上一次操作遗留的
+    顶点/边选择会在进入编辑模式时被 Blender 的选择传播放大成「整个网格
+    全选」——用户点「选择」看到的是一堆边，而不是检测出的那几个面。"""
+
+    def test_selecting_one_face_clears_residual_edge_and_vert_selection(self):
+        bm, obj, mesh = create_test_mesh("selection_residue", CUBE_VERTS, CUBE_FACES)
+        try:
+            # 模拟上一次操作遗留：顶点与边全部处于选中状态
+            for edge in mesh.edges:
+                edge.select = True
+            for vert in mesh.vertices:
+                vert.select = True
+
+            utils._apply_mesh_selection(obj, 'FACE', [0])
+
+            self.assertEqual(sum(1 for p in mesh.polygons if p.select), 1)
+            self.assertEqual(sum(1 for e in mesh.edges if e.select), 0)
+            self.assertEqual(sum(1 for v in mesh.vertices if v.select), 0)
+        finally:
+            cleanup_test_data(bm, obj, mesh)
+
+    def test_selecting_vertices_clears_residual_face_selection(self):
+        bm, obj, mesh = create_test_mesh("selection_residue_vert", CUBE_VERTS, CUBE_FACES)
+        try:
+            for polygon in mesh.polygons:
+                polygon.select = True
+
+            utils._apply_mesh_selection(obj, 'VERT', [0, 1])
+
+            self.assertEqual(sum(1 for v in mesh.vertices if v.select), 2)
+            self.assertEqual(sum(1 for p in mesh.polygons if p.select), 0)
+            self.assertEqual(sum(1 for e in mesh.edges if e.select), 0)
         finally:
             cleanup_test_data(bm, obj, mesh)
 

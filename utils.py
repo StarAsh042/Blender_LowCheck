@@ -1437,13 +1437,23 @@ def deselect_all_objects(context):
         pass
 
 
-def _clear_mesh_selection(mesh, element_type):
-    """清除网格上指定类型元素的全部选择标志"""
-    collection = getattr(mesh, _ELEMENT_COLLECTIONS[element_type], None)
-    if collection is None:
-        return
-    for element in collection:
-        element.select = False
+def _clear_mesh_selection(mesh):
+    """
+    清除网格上顶点 / 边 / 面的**全部**选择标志。
+
+    .. note::
+       必须清空全部三种元素，不能只清目标类型。Blender 在进入编辑模式时
+       会按当前选择模式做选择传播（flush）：残留的顶点或边只要处于选中
+       状态，就会把与之相连的面一并"传染"为选中。只清目标类型时，上一次
+       操作遗留的顶点/边选择会把结果放大——例如只想选中 1 个面，进入编辑
+       模式后却变成整个网格全选（实测：面 1→6、边 0→12、点 0→8）。
+    """
+    for collection_name in _ELEMENT_COLLECTIONS.values():
+        collection = getattr(mesh, collection_name, None)
+        if collection is None:
+            continue
+        for element in collection:
+            element.select = False
 
 
 def _apply_mesh_selection(obj, element_type, indices):
@@ -1453,6 +1463,11 @@ def _apply_mesh_selection(obj, element_type, indices):
     相比旧的 ``bm.to_mesh(obj.data)`` 往返写法，本方式：
       * 不重建网格数据（更安全，不会丢失自定义数据层）
       * 无需构建 BMesh（多物体批量选择时速度提升明显）
+
+    .. note::
+       写入前会清空**全部**元素类型的选择（见 :func:`_clear_mesh_selection`），
+       只保留本次写入的目标元素。目标元素的下级元素（面的边与顶点）无需
+       手工同步——Blender 在进入编辑模式时会按当前选择模式自动传播。
 
     Args:
         obj: 网格对象
@@ -1466,7 +1481,7 @@ def _apply_mesh_selection(obj, element_type, indices):
     if mesh is None or element_type not in _ELEMENT_COLLECTIONS:
         return 0
 
-    _clear_mesh_selection(mesh, element_type)
+    _clear_mesh_selection(mesh)
     collection = getattr(mesh, _ELEMENT_COLLECTIONS[element_type])
     total = len(collection)
 
