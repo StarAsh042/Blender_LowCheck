@@ -141,6 +141,9 @@ def unregister():
         bpy.app.handlers.load_post.remove(_lowpoly_clear_results_on_load)
 
     _unregister_all()
+    # 尽力清理内核缓存目录。内核已被加载时扩展文件正被进程锁定、删不掉，
+    # 属预期（Windows 硬限制），cleanup_kernel_cache 内部会吞掉这类错误。
+    utils.cleanup_kernel_cache()
     register._lowpoly_registered = False
 
 
