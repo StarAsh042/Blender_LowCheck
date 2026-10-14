@@ -35,7 +35,7 @@ PLUGIN_DIR = os.path.dirname(SCRIPT_DIR)
 ADDON_NAME = os.path.basename(PLUGIN_DIR)
 
 # 随插件分发的文件（目录会递归打包）
-INCLUDE_FILES = ("__init__.py", "registry.py", "utils.py", "properties.py",
+INCLUDE_FILES = ("__init__.py", "i18n.py", "registry.py", "utils.py", "properties.py",
                  "ui.py", "README.md", "CHANGELOG.md", "LICENSE")
 INCLUDE_DIRS = ("operators",)
 
