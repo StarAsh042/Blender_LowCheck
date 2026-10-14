@@ -105,6 +105,23 @@ class TestTranslationCoverage(unittest.TestCase):
             self.assertIsNotNone(text, f"面板缺少 {attr}")
             self.assertIn(text, i18n.ZH_CN, f"面板 {attr} = {text!r} 缺少 zh_CN 译文")
 
+    def test_bl_info_is_ascii(self):
+        """
+        ``bl_info`` 必须是纯英文。
+
+        Blender 直接从模块源码读取 ``bl_info`` 用于「编辑 > 首选项 > 插件」
+        列表与安装界面，**不经过** bpy.app.translations 查表（插件未启用时
+        字典尚未注册）。因此这里写什么语言，用户就看到什么语言——只能是英文。
+        """
+        import Blender_LowCheck
+
+        for key in ("name", "description", "location", "category"):
+            text = Blender_LowCheck.bl_info.get(key, "")
+            self.assertTrue(
+                text.isascii(),
+                f"bl_info[{key!r}] 含非 ASCII 字符，安装界面将显示中文：{text!r}",
+            )
+
     def test_no_empty_translations(self):
         """译文不得为空串——空译文在界面上会显示成空白，比漏翻更难排查"""
         empty = [src for src, dst in i18n.ZH_CN.items() if not dst.strip()]
