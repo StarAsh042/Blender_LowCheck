@@ -9,12 +9,16 @@
 
 
 bl_info = {
-    "name": "低模质量检查 (Lowpoly Check)",
+    #: ``bl_info`` 由 Blender 直接从模块源码读取，用于「编辑 > 首选项 > 插件」
+    #: 列表与安装界面，**不经过** bpy.app.translations 的查表机制（插件未启用
+    #: 时字典尚未注册）。因此这里必须使用英文——与 Blender 官方惯例一致。
+    "name": "Lowpoly Check",
     "author": "StarAsh042",
     "version": (1, 0, 0),
     "blender": (3, 4, 0),
     "location": "View3D > Sidebar > Lowpoly Tools",
-    "description": "检查低多边形模型质量，覆盖网格拓扑、顶点质量、面质量、场景优化四大维度",
+    "description": "Check low-poly model quality: mesh topology, vertex quality, "
+                   "face quality and scene optimization",
     "category": "Mesh",
 }
 
