@@ -22,10 +22,10 @@ from collections import namedtuple
 
 #: 面板分组：``(分组键, 分组标题, 分组图标)``，顺序即面板显示顺序。
 GROUPS = (
-    ("topology", "网格拓扑", "MESH_DATA"),
-    ("vertex", "顶点质量", "VERTEXSEL"),
-    ("face", "面质量", "FACESEL"),
-    ("scene", "场景优化", "SCENE_DATA"),
+    ("topology", "Mesh Topology", "MESH_DATA"),
+    ("vertex", "Vertex Quality", "VERTEXSEL"),
+    ("face", "Face Quality", "FACESEL"),
+    ("scene", "Scene Optimization", "SCENE_DATA"),
 )
 
 #: 检测项声明。
@@ -59,100 +59,100 @@ CheckSpec = namedtuple("CheckSpec", (
 CHECKS = (
     # ── 网格拓扑 ────────────────────────────────────────────────
     CheckSpec(
-        "ngon_faces", "check", "topology", "N-gon面检查", "MESH_DATA", "FACE",
-        ("ngon_count",), "数量: {ngon_count}",
+        "ngon_faces", "check", "topology", "N-gon Faces Check", "MESH_DATA", "FACE",
+        ("ngon_count",), "Count: {ngon_count}",
         "lowpoly.check_ngon_faces", "lowpoly.select_ngon_faces", (),
     ),
     CheckSpec(
-        "overlapping_faces", "check", "topology", "重叠面检查", "FACESEL", "FACE",
-        ("overlapping_face_count",), "数量: {overlapping_face_count}",
+        "overlapping_faces", "check", "topology", "Overlapping Faces Check", "FACESEL", "FACE",
+        ("overlapping_face_count",), "Count: {overlapping_face_count}",
         "lowpoly.check_overlapping_faces", "lowpoly.select_overlapping_faces", (),
     ),
     CheckSpec(
-        "wrong_normals", "check", "topology", "错误法线检查（朝内）", "NORMALS_FACE", "FACE",
-        ("wrong_normal_count",), "数量: {wrong_normal_count}",
+        "wrong_normals", "check", "topology", "Wrong Normals Check (Inward)", "NORMALS_FACE", "FACE",
+        ("wrong_normal_count",), "Count: {wrong_normal_count}",
         "lowpoly.check_wrong_normals", "lowpoly.select_wrong_normals", (),
     ),
     CheckSpec(
-        "non_manifold_edges", "check", "topology", "非流形边检查", "EDGESEL", "EDGE",
-        ("non_manifold_edge_count",), "数量: {non_manifold_edge_count}",
+        "non_manifold_edges", "check", "topology", "Non-manifold Edges Check", "EDGESEL", "EDGE",
+        ("non_manifold_edge_count",), "Count: {non_manifold_edge_count}",
         "lowpoly.check_non_manifold_edges", "lowpoly.select_non_manifold_edges", (),
     ),
     CheckSpec(
-        "loose_geometry", "check", "topology", "孤立几何体检查", "OUTLINER_OB_MESH", "VERT",
+        "loose_geometry", "check", "topology", "Loose Geometry Check", "OUTLINER_OB_MESH", "VERT",
         ("loose_vert_count", "loose_edge_count"),
-        "悬浮顶点: {loose_vert_count} 悬浮边: {loose_edge_count}",
+        "Loose Vertices: {loose_vert_count}  Loose Edges: {loose_edge_count}",
         "lowpoly.check_loose_geometry", "lowpoly.select_loose_geometry", (),
     ),
 
     # ── 顶点质量 ────────────────────────────────────────────────
     CheckSpec(
-        "unwelded_vertices", "check", "vertex", "未焊接点检查", "VERTEXSEL", "VERT",
-        ("unwelded_vert_count",), "数量: {unwelded_vert_count}",
+        "unwelded_vertices", "check", "vertex", "Unwelded Vertices Check", "VERTEXSEL", "VERT",
+        ("unwelded_vert_count",), "Count: {unwelded_vert_count}",
         "lowpoly.check_unwelded_vertices", "lowpoly.select_unwelded_vertices",
         ("unwelded_threshold",),
     ),
     CheckSpec(
-        "collinear_vertices", "check", "vertex", "共线顶点检查", "VERTEXSEL", "VERT",
-        ("collinear_vert_count",), "数量: {collinear_vert_count}",
+        "collinear_vertices", "check", "vertex", "Collinear Vertices Check", "VERTEXSEL", "VERT",
+        ("collinear_vert_count",), "Count: {collinear_vert_count}",
         "lowpoly.check_collinear_vertices", "lowpoly.select_collinear_vertices",
         ("collinear_threshold",),
     ),
     CheckSpec(
-        "dense_vertices", "optimize", "vertex", "密集顶点检测", "VERTEXSEL", "VERT",
-        ("dense_vert_count",), "数量: {dense_vert_count}",
+        "dense_vertices", "optimize", "vertex", "Dense Vertices Check", "VERTEXSEL", "VERT",
+        ("dense_vert_count",), "Count: {dense_vert_count}",
         "lowpoly.suggest_dense_vertices", "lowpoly.select_dense_vertices",
         ("dense_distance_threshold", "dense_count_threshold"),
     ),
 
     # ── 面质量 ──────────────────────────────────────────────────
     CheckSpec(
-        "degenerate_geometry", "check", "face", "退化几何体检查", "MESH_DATA", "EDGE",
+        "degenerate_geometry", "check", "face", "Degenerate Geometry Check", "MESH_DATA", "EDGE",
         ("degenerate_edge_count", "degenerate_face_count"),
-        "退化边: {degenerate_edge_count} 退化面: {degenerate_face_count}",
+        "Degenerate Edges: {degenerate_edge_count}  Degenerate Faces: {degenerate_face_count}",
         "lowpoly.check_degenerate_geometry", "lowpoly.select_degenerate_geometry",
         ("degenerate_edge_threshold", "degenerate_face_threshold"),
     ),
     CheckSpec(
-        "distorted_quads", "check", "face", "非平面四边面检查", "MESH_DATA", "FACE",
-        ("distorted_quad_count",), "数量: {distorted_quad_count}",
+        "distorted_quads", "check", "face", "Distorted Quads Check", "MESH_DATA", "FACE",
+        ("distorted_quad_count",), "Count: {distorted_quad_count}",
         "lowpoly.check_distorted_quads", "lowpoly.select_distorted_quads",
         ("distortion_threshold",),
     ),
     CheckSpec(
-        "concave_quads", "check", "face", "内凹四边面检查", "MESH_DATA", "FACE",
-        ("concave_quad_count",), "数量: {concave_quad_count}",
+        "concave_quads", "check", "face", "Concave Quads Check", "MESH_DATA", "FACE",
+        ("concave_quad_count",), "Count: {concave_quad_count}",
         "lowpoly.check_concave_quads", "lowpoly.select_concave_quads", (),
     ),
 
     # ── 场景优化 ────────────────────────────────────────────────
     CheckSpec(
-        "high_poly_objects", "optimize", "scene", "高面数物体检测", "MESH_DATA", "OBJECT",
-        ("high_poly_count",), "数量: {high_poly_count}",
+        "high_poly_objects", "optimize", "scene", "High-poly Objects Check", "MESH_DATA", "OBJECT",
+        ("high_poly_count",), "Count: {high_poly_count}",
         "lowpoly.suggest_high_poly_objects", "lowpoly.select_high_poly_objects",
         ("polycount_threshold",),
     ),
     CheckSpec(
-        "small_bevels", "optimize", "scene", "小倒角结构检测", "FACESEL", "FACE",
-        ("small_bevel_count",), "数量: {small_bevel_count}",
+        "small_bevels", "optimize", "scene", "Small Bevels Check", "FACESEL", "FACE",
+        ("small_bevel_count",), "Count: {small_bevel_count}",
         "lowpoly.suggest_small_bevels", "lowpoly.select_small_bevels",
         ("bevel_width_threshold",),
     ),
     CheckSpec(
-        "downward_faces", "optimize", "scene", "朝下水平面检测", "FACESEL", "FACE",
-        ("downward_face_count",), "数量: {downward_face_count}",
+        "downward_faces", "optimize", "scene", "Downward Faces Check", "FACESEL", "FACE",
+        ("downward_face_count",), "Count: {downward_face_count}",
         "lowpoly.suggest_downward_faces", "lowpoly.select_downward_faces",
         ("downward_area_threshold", "downward_angle_threshold"),
     ),
     CheckSpec(
-        "intersecting_objects", "optimize", "scene", "穿插物体检测", "OBJECT_DATA", "OBJECT",
-        ("intersecting_object_count",), "数量: {intersecting_object_count}",
+        "intersecting_objects", "optimize", "scene", "Intersecting Objects Check", "OBJECT_DATA", "OBJECT",
+        ("intersecting_object_count",), "Count: {intersecting_object_count}",
         "lowpoly.suggest_intersecting_objects", "lowpoly.select_intersecting_objects",
         ("intersect_overlap_threshold",),
     ),
     CheckSpec(
-        "non_uniform_scale", "optimize", "scene", "非均匀缩放物体检测", "OBJECT_DATA", "OBJECT",
-        ("non_uniform_scale_count",), "数量: {non_uniform_scale_count}",
+        "non_uniform_scale", "optimize", "scene", "Non-uniformly Scaled Objects Check", "OBJECT_DATA", "OBJECT",
+        ("non_uniform_scale_count",), "Count: {non_uniform_scale_count}",
         "lowpoly.suggest_non_uniform_scale", "lowpoly.select_non_uniform_scale", (),
     ),
 )

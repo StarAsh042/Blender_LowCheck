@@ -5,10 +5,16 @@ UI面板模块
 面板内容完全由 :mod:`registry` 驱动：分组、行标题、图标、检查/选择按钮、
 阈值滑杆与数量文案都来自单一数据源。新增检测项只需在 ``registry.CHECKS``
 中登记，无需改动本文件——这消除了「改了检测项却漏改面板」这类低级错误。
+
+.. note::
+   传给 ``layout.label(text=...)`` / ``operator(text=...)`` 的字符串**显式**
+   经 :func:`i18n.translate` 翻译，不依赖 Blender 是否自动翻译按钮文本——
+   这样无论绘制路径如何，两种语言都能正确显示。
 """
 
 import bpy
 
+from . import i18n
 from . import registry
 
 
@@ -17,8 +23,8 @@ from . import registry
 def _draw_op_row(layout, check_op, select_op, count_text):
     """绘制 检查 / 选择 按钮 + 数量标签"""
     row = layout.row(align=True)
-    row.operator(check_op, text="检查")
-    row.operator(select_op, text="选择")
+    row.operator(check_op, text=i18n.translate("Check"))
+    row.operator(select_op, text=i18n.translate("Select"))
     row.label(text=count_text)
 
 
@@ -36,9 +42,9 @@ def _draw_threshold_row(layout, props, prop_name):
 
 
 def _format_count(spec, props):
-    """按检测项声明的模板渲染数量文案"""
+    """按检测项声明的模板渲染数量文案（模板本身需要翻译）"""
     values = {name: getattr(props, name, 0) for name in spec.count_props}
-    return spec.count_template.format(**values)
+    return i18n.translate(spec.count_template).format(**values)
 
 
 def _count_problems(props):
@@ -53,7 +59,7 @@ class LOWPOLY_PT_quality_panel(bpy.types.Panel):
     低模质量检查面板
     按模型制作流程分为：网格拓扑 / 顶点质量 / 面质量 / 场景优化
     """
-    bl_label = "低模质量检查"
+    bl_label = "Lowpoly Check"
     bl_idname = "LOWPOLY_PT_quality_panel"
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
@@ -67,7 +73,8 @@ class LOWPOLY_PT_quality_panel(bpy.types.Panel):
         layout = self.layout
         props = getattr(context.scene, "lowpoly", None)
         if props is None:
-            layout.label(text="插件未正确加载，请重新启用", icon='ERROR')
+            layout.label(text=i18n.translate("Add-on failed to load, please re-enable it"),
+                         icon='ERROR')
             return
 
         self._draw_header(layout, props)
@@ -79,11 +86,11 @@ class LOWPOLY_PT_quality_panel(bpy.types.Panel):
                 continue
 
             layout.separator()
-            layout.label(text=group_label, icon=group_icon)
+            layout.label(text=i18n.translate(group_label), icon=group_icon)
 
             for spec in specs:
                 box = layout.box()
-                box.label(text=spec.label, icon=spec.icon)
+                box.label(text=i18n.translate(spec.label), icon=spec.icon)
                 _draw_op_row(
                     box, spec.check_op, spec.select_op, _format_count(spec, props)
                 )
@@ -96,14 +103,17 @@ class LOWPOLY_PT_quality_panel(bpy.types.Panel):
     def _draw_header(layout, props):
         """顶部：运行范围 + 全局操作按钮"""
         box = layout.box()
-        box.label(text="检测范围", icon='RESTRICT_SELECT_OFF')
+        box.label(text=i18n.translate("Detection Scope"), icon='RESTRICT_SELECT_OFF')
         box.prop(props, "only_selected", toggle=True)
 
         col = box.column(align=True)
-        col.operator("lowpoly.run_all_checks", text="运行全部检查", icon='FILE_REFRESH')
+        col.operator("lowpoly.run_all_checks",
+                     text=i18n.translate("Run All Checks"), icon='FILE_REFRESH')
         row = col.row(align=True)
-        row.operator("lowpoly.clear_results", text="清除结果", icon='X')
-        row.operator("lowpoly.reset_all_params", text="重置所有参数", icon='LOOP_BACK')
+        row.operator("lowpoly.clear_results",
+                     text=i18n.translate("Clear Results"), icon='X')
+        row.operator("lowpoly.reset_all_params",
+                     text=i18n.translate("Reset All Parameters"), icon='LOOP_BACK')
 
     @staticmethod
     def _draw_summary(layout, props):
@@ -114,15 +124,18 @@ class LOWPOLY_PT_quality_panel(bpy.types.Panel):
         row = box.row()
         row.alignment = 'LEFT'
         if total > 0:
-            row.label(text=f"问题总数: {total}", icon='ERROR')
+            row.label(text=i18n.translate("Total problems: {total}").format(total=total),
+                      icon='ERROR')
         else:
-            row.label(text="暂无检测结果", icon='INFO')
+            row.label(text=i18n.translate("No results yet"), icon='INFO')
 
         hint = box.column(align=True)
         hint.scale_y = 0.85
         if props.only_selected:
-            hint.label(text="提示: 当前仅检测选中物体", icon='RESTRICT_SELECT_ON')
-        hint.label(text="提示: 未发现的项会清空其历史结果", icon='QUESTION')
+            hint.label(text=i18n.translate("Note: only selected objects are checked"),
+                       icon='RESTRICT_SELECT_ON')
+        hint.label(text=i18n.translate("Note: items not found clear their previous results"),
+                   icon='QUESTION')
 
 
 # ── 注册/注销 ──────────────────────────────────────────────────────────

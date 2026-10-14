@@ -26,6 +26,8 @@ import bpy  # noqa: E402
 
 from Blender_LowCheck import i18n  # noqa: E402
 from Blender_LowCheck import properties  # noqa: E402
+from Blender_LowCheck import registry  # noqa: E402
+from Blender_LowCheck import ui  # noqa: E402
 
 
 def _missing(entries, label):
@@ -76,6 +78,32 @@ class TestTranslationCoverage(unittest.TestCase):
         descs = [prop.description for prop in _own_properties()]
         self.assertEqual(_missing(descs, "description"), [],
                          "以下属性描述缺少 zh_CN 译文")
+
+    def test_all_registry_labels_translated(self):
+        """检测项标题与分组标题（面板上直接显示的文字）"""
+        labels = [spec.label for spec in registry.CHECKS]
+        labels += [label for _key, label, _icon in registry.GROUPS]
+        self.assertEqual(_missing(labels, "label"), [],
+                         "以下检测项 / 分组标题缺少 zh_CN 译文")
+
+    def test_all_count_templates_translated(self):
+        """面板上的数量文案模板（如 '数量: {ngon_count}'）"""
+        templates = [spec.count_template for spec in registry.CHECKS]
+        self.assertEqual(_missing(templates, "count_template"), [],
+                         "以下数量文案模板缺少 zh_CN 译文")
+
+    def test_panel_label_and_category_translated(self):
+        """
+        面板标题与**侧边栏标签**。
+
+        ``bl_category`` 决定 N 面板上的选项卡名，用户第一眼就会看到，
+        最容易在新增语言时被漏掉。
+        """
+        panel = ui.LOWPOLY_PT_quality_panel
+        for attr in ("bl_label", "bl_category"):
+            text = getattr(panel, attr, None)
+            self.assertIsNotNone(text, f"面板缺少 {attr}")
+            self.assertIn(text, i18n.ZH_CN, f"面板 {attr} = {text!r} 缺少 zh_CN 译文")
 
     def test_no_empty_translations(self):
         """译文不得为空串——空译文在界面上会显示成空白，比漏翻更难排查"""
