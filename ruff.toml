@@ -1,0 +1,20 @@
+# ruff 静态检查配置
+#
+# 目标版本与 Blender 3.4 内置的 CPython 对齐。
+target-version = "py310"
+line-length = 100
+
+[lint]
+select = ["E", "F", "W"]
+ignore = [
+    # Blender 插件必须在模块顶部先声明 bl_info、再 import bpy，
+    # 因此「所有模块级导入都在文件顶部」这条不适用。
+    "E402",
+    # 行宽由 line-length 控制，E501 与 formatter 的取舍冲突
+    "E501",
+]
+
+[lint.per-file-ignores]
+# 操作符基类保留 bpy 导入作为注册上下文（子类经 bpy.types 注册），
+# 当前文件内未直接引用。
+"operators/base.py" = ["F401"]
