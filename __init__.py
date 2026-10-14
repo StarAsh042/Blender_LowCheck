@@ -21,6 +21,7 @@ bl_info = {
 
 import bpy
 
+from . import i18n
 from . import registry
 from . import utils
 from . import properties
@@ -57,9 +58,10 @@ def reload_modules():
     # 1) 先用「当前」的类对象干净注销（此时尚未 reload）
     unregister()
 
-    # 2) 按依赖顺序重新加载：registry 无依赖故最先；
+    # 2) 按依赖顺序重新加载：i18n 与 registry 无依赖故最先；
     #    check_operators 依赖 optimize_operators，故排在它之后。
     order = [
+        i18n,
         registry,
         utils,
         properties,
@@ -87,8 +89,14 @@ def _lowpoly_clear_results_on_load(_dummy):
 
 
 def _unregister_all():
-    """按依赖倒序注销各子模块，单个模块失败不影响其余模块"""
-    for unregister_fn in (ui.unregister, operators.unregister, properties.unregister):
+    """
+    按依赖倒序注销各子模块，单个模块失败不影响其余模块。
+
+    翻译表排在**最后**注销——它必须活得比面板 / 操作符 / 属性更久，
+    否则注销过程中若触发一次重绘，界面文本将失去译文。
+    """
+    for unregister_fn in (ui.unregister, operators.unregister, properties.unregister,
+                          i18n.unregister):
         try:
             unregister_fn()
         except Exception as exc:  # noqa: BLE001 - 注销必须尽可能完整执行
@@ -107,6 +115,9 @@ def register():
         return
 
     try:
+        # 翻译表必须最先注册：面板 / 操作符 / 属性注册后可能立刻被绘制，
+        # 字典尚未就绪时会先闪一次英文（A1 依赖拓扑序）。
+        i18n.register()
         properties.register()
         operators.register()
         ui.register()

@@ -1,6 +1,11 @@
 """
 属性组模块
 定义插件的属性组和配置参数
+
+.. note::
+   属性的 ``name`` / ``description`` 使用**英文源串**，由 :mod:`i18n` 提供
+   中文翻译；``identifier``（属性名本身）一律不变，因此旧 ``.blend`` 文件
+   中的阈值与计数读写不受影响。
 """
 
 import bpy
@@ -14,130 +19,134 @@ class LowPolyProperties(bpy.types.PropertyGroup):
 
     # ── 网格拓扑：计数 ──────────────────────────────────────────
     ngon_count: bpy.props.IntProperty(
-        name="N-gon面数",
+        name="N-gon Faces",
         default=0,
-        description="检测到的N-gon面数量"
+        description="Number of detected N-gon faces"
     )
     overlapping_face_count: bpy.props.IntProperty(
-        name="重叠面数",
+        name="Overlapping Faces",
         default=0,
-        description="检测到的重叠面数量"
+        description="Number of detected overlapping faces"
     )
     wrong_normal_count: bpy.props.IntProperty(
-        name="错误法线面数",
+        name="Wrong-normal Faces",
         default=0,
-        description="检测到的法线朝内的面数量"
+        description="Number of faces whose normals point inward"
     )
     non_manifold_edge_count: bpy.props.IntProperty(
-        name="非流形边数",
+        name="Non-manifold Edges",
         default=0,
-        description="检测到的非流形边数量（被3个及以上面共用）"
+        description="Number of detected non-manifold edges (shared by 3 or more faces)"
     )
     loose_vert_count: bpy.props.IntProperty(
-        name="孤立顶点数",
+        name="Loose Vertices",
         default=0,
-        description="不属于任何面的悬浮顶点数量"
+        description="Number of vertices not used by any face"
     )
     loose_edge_count: bpy.props.IntProperty(
-        name="孤立边数",
+        name="Loose Edges",
         default=0,
-        description="不属于任何面的悬浮边数量"
+        description="Number of edges not used by any face"
     )
 
     # ── 顶点质量：计数 ──────────────────────────────────────────
     unwelded_vert_count: bpy.props.IntProperty(
-        name="未焊接点数",
+        name="Unwelded Vertices",
         default=0,
-        description="检测到的未焊接点数量"
+        description="Number of detected unwelded vertices"
     )
     collinear_vert_count: bpy.props.IntProperty(
-        name="共线顶点数",
+        name="Collinear Vertices",
         default=0,
-        description="检测到的共线顶点数量"
+        description="Number of detected collinear vertices"
     )
     dense_vert_count: bpy.props.IntProperty(
-        name="密集顶点数",
+        name="Dense Vertices",
         default=0,
-        description="检测到的密集顶点数量"
+        description="Number of detected dense vertices"
     )
 
     # ── 面质量：计数 ────────────────────────────────────────────
     degenerate_edge_count: bpy.props.IntProperty(
-        name="退化边数",
+        name="Degenerate Edges",
         default=0,
-        description="检测到的零长度边数量"
+        description="Number of detected zero-length edges"
     )
     degenerate_face_count: bpy.props.IntProperty(
-        name="退化面数",
+        name="Degenerate Faces",
         default=0,
-        description="检测到的零面积面数量"
+        description="Number of detected zero-area faces"
     )
     distorted_quad_count: bpy.props.IntProperty(
-        name="扭曲四边面数",
+        name="Distorted Quads",
         default=0,
-        description="检测到的扭曲四边面数量（不共面的四边面）"
+        description="Number of detected distorted quads (non-planar quads)"
     )
     concave_quad_count: bpy.props.IntProperty(
-        name="内凹四边面数",
+        name="Concave Quads",
         default=0,
-        description="检测到的内凹四边面数量"
+        description="Number of detected concave quads"
     )
 
     # ── 场景优化：计数 ──────────────────────────────────────────
     high_poly_count: bpy.props.IntProperty(
-        name="高面数物体数",
+        name="High-poly Objects",
         default=0,
-        description="检测到的高面数物体数量"
+        description="Number of detected high-poly objects"
     )
     small_bevel_count: bpy.props.IntProperty(
-        name="小倒角数",
+        name="Small Bevels",
         default=0,
-        description="检测到的小倒角数量"
+        description="Number of detected small bevels"
     )
     downward_face_count: bpy.props.IntProperty(
-        name="朝下面数",
+        name="Downward Faces",
         default=0,
-        description="检测到的朝下面数量"
+        description="Number of detected downward-facing faces"
     )
     intersecting_object_count: bpy.props.IntProperty(
-        name="穿插物体数",
+        name="Intersecting Objects",
         default=0,
-        description="检测到的穿插物体数量"
+        description="Number of detected intersecting objects"
     )
     non_uniform_scale_count: bpy.props.IntProperty(
-        name="非均匀缩放物体数",
+        name="Non-uniformly Scaled Objects",
         default=0,
-        description="缩放值不统一的物体数量"
+        description="Number of objects with non-uniform scale"
     )
 
     # ── 运行选项 ────────────────────────────────────────────────
     only_selected: bpy.props.BoolProperty(
-        name="仅处理选中物体",
-        description="勾选后只检测当前被选中的可见网格物体，适合在大场景中做局部检查",
+        name="Only Selected Objects",
+        description="Detect only the currently selected visible mesh objects; "
+                    "useful for local checks in large scenes",
         default=False
     )
 
     # ── 阈值设置 ────────────────────────────────────────────────
     # 面质量阈值
     distortion_threshold: bpy.props.FloatProperty(
-        name="非平面阈值",
-        description="四边面不共面的距离阈值，超过该值视为扭曲四边面（默认 0.01）",
+        name="Planarity Threshold",
+        description="Distance threshold for quad non-planarity; above this a quad "
+                    "counts as distorted (default 0.01)",
         default=0.01,
         min=0.0,
         precision=6,
         step=0.1
     )
     degenerate_edge_threshold: bpy.props.FloatProperty(
-        name="退化边阈值",
-        description="判断零长度边的阈值，边长小于该值视为退化边（默认 0.0001）",
+        name="Degenerate Edge Threshold",
+        description="Edge length threshold; shorter edges count as degenerate "
+                    "(default 0.0001)",
         default=0.0001,
         min=0.0,
         precision=8,
         step=0.01
     )
     degenerate_face_threshold: bpy.props.FloatProperty(
-        name="退化面阈值",
-        description="判断零面积面的阈值，面积小于该值视为退化面（默认 0.0001）",
+        name="Degenerate Face Threshold",
+        description="Face area threshold; smaller faces count as degenerate "
+                    "(default 0.0001)",
         default=0.0001,
         min=0.0,
         precision=8,
@@ -146,8 +155,9 @@ class LowPolyProperties(bpy.types.PropertyGroup):
 
     # 顶点质量阈值
     collinear_threshold: bpy.props.FloatProperty(
-        name="共线阈值",
-        description="三点共线的角度阈值（弧度），越小越严格（默认 0.01）",
+        name="Collinear Threshold",
+        description="Angle threshold in radians for collinear vertices; "
+                    "smaller is stricter (default 0.01)",
         default=0.01,
         min=0.0,
         max=1.57,
@@ -155,24 +165,25 @@ class LowPolyProperties(bpy.types.PropertyGroup):
         step=0.01
     )
     unwelded_threshold: bpy.props.FloatProperty(
-        name="未焊接阈值",
-        description="判断顶点未焊接的距离阈值，两点距离小于该值且无边相连即视为未焊接（默认 0.001）",
+        name="Unwelded Threshold",
+        description="Distance threshold for unwelded vertices; vertices closer than "
+                    "this and not joined by an edge are reported (default 0.001)",
         default=0.001,
         min=0.0,
         precision=6,
         step=0.1
     )
     dense_distance_threshold: bpy.props.FloatProperty(
-        name="密集距离阈值",
-        description="判断顶点密集的搜索半径（默认 0.1）",
+        name="Dense Distance Threshold",
+        description="Search radius for dense vertices (default 0.1)",
         default=0.1,
         min=0.0,
         precision=4,
         step=0.1
     )
     dense_count_threshold: bpy.props.IntProperty(
-        name="密集数量阈值",
-        description="半径内顶点数量达到该值即视为密集（默认 5）",
+        name="Dense Count Threshold",
+        description="Vertex count within the radius that counts as dense (default 5)",
         default=5,
         min=2,
         max=100
@@ -180,31 +191,33 @@ class LowPolyProperties(bpy.types.PropertyGroup):
 
     # 场景优化阈值
     polycount_threshold: bpy.props.IntProperty(
-        name="面数阈值",
-        description="物体面数超过该值即视为高面数物体（默认 50）",
+        name="Polygon Count Threshold",
+        description="Objects with more polygons than this count as high-poly (default 50)",
         default=50,
         min=0,
         max=100000
     )
     bevel_width_threshold: bpy.props.FloatProperty(
-        name="倒角宽度阈值",
-        description="小倒角的宽度阈值，最短边小于该值即视为小倒角（默认 0.1）",
+        name="Bevel Width Threshold",
+        description="Width threshold for small bevels; faces whose shortest edge is "
+                    "below this are reported (default 0.1)",
         default=0.1,
         min=0.0,
         precision=4,
         step=0.1
     )
     downward_area_threshold: bpy.props.FloatProperty(
-        name="朝下面积阈值",
-        description="检测朝下面的最小面积阈值，0 表示全部检测（默认 0）",
+        name="Downward Area Threshold",
+        description="Minimum world-space area for downward faces; 0 checks all (default 0)",
         default=0.0,
         min=0.0,
         precision=4,
         step=0.1
     )
     downward_angle_threshold: bpy.props.FloatProperty(
-        name="朝下角度阈值",
-        description="面法线与竖直向下方向的夹角阈值（度），小于此值视为朝下水平面（默认 5）",
+        name="Downward Angle Threshold",
+        description="Angle threshold in degrees between the face normal and straight "
+                    "down (default 5)",
         default=5.0,
         min=0.0,
         max=90.0,
@@ -212,8 +225,9 @@ class LowPolyProperties(bpy.types.PropertyGroup):
         step=1
     )
     intersect_overlap_threshold: bpy.props.FloatProperty(
-        name="穿插重叠阈值",
-        description="最小重叠比例阈值（0-1），包围盒重叠比例超过此值才认为是穿插（默认 0）",
+        name="Intersection Overlap Threshold",
+        description="Minimum bounding-box overlap ratio (0-1) required to report an "
+                    "intersection (default 0)",
         default=0.0,
         min=0.0,
         max=1.0,
