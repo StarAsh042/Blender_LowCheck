@@ -307,6 +307,93 @@ class TestSceneChecks(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
+# 朝下水平面：世界空间判定
+# ---------------------------------------------------------------------------
+
+class TestDownwardFacesWorldSpace(unittest.TestCase):
+    """朝下水平面必须按**世界空间**法线判定。
+
+    回归：旧实现直接使用 BMesh 的局部空间法线，物体一旦旋转就会同时
+    产生漏检与误报。立方体绕 X 轴旋转 90° 后，世界空间朝下的是面 2
+    （世界法线 (0, 0, -1)），而面 0 的世界法线已变成 (0, 1, 0)。
+    """
+
+    #: 单位立方体，外法线朝外
+    CUBE_VERTS = [(-1, -1, -1), (1, -1, -1), (1, 1, -1), (-1, 1, -1),
+                  (-1, -1, 1), (1, -1, 1), (1, 1, 1), (-1, 1, 1)]
+    CUBE_FACES = [(0, 3, 2, 1), (4, 5, 6, 7), (0, 1, 5, 4),
+                  (1, 2, 6, 5), (2, 3, 7, 6), (3, 0, 4, 7)]
+
+    def test_unrotated_object_matches_local_space(self):
+        bm, obj, mesh = make_bmesh("down_flat", self.CUBE_VERTS, self.CUBE_FACES)
+        try:
+            bpy.context.view_layer.update()
+            found = utils.get_downward_faces(bm, 0.0, 5.0, matrix_world=obj.matrix_world)
+            self.assertEqual(found, [0])
+        finally:
+            drop(bm, obj, mesh)
+
+    def test_rotated_object_reports_world_downward_face(self):
+        bm, obj, mesh = make_bmesh("down_rotated", self.CUBE_VERTS, self.CUBE_FACES)
+        try:
+            obj.rotation_euler = (math.radians(90.0), 0.0, 0.0)
+            bpy.context.view_layer.update()
+            found = utils.get_downward_faces(bm, 0.0, 5.0, matrix_world=obj.matrix_world)
+            self.assertEqual(found, [2])
+        finally:
+            drop(bm, obj, mesh)
+
+    def test_local_space_normals_miss_the_world_downward_face(self):
+        """同一网格不传 matrix_world 时会漏掉真正朝下的面（说明该参数不可省）"""
+        bm, obj, mesh = make_bmesh("down_rotated_local", self.CUBE_VERTS, self.CUBE_FACES)
+        try:
+            obj.rotation_euler = (math.radians(90.0), 0.0, 0.0)
+            bpy.context.view_layer.update()
+            self.assertNotIn(2, utils.get_downward_faces(bm, 0.0, 5.0))
+        finally:
+            drop(bm, obj, mesh)
+
+    def test_uniform_scale_does_not_change_result(self):
+        bm, obj, mesh = make_bmesh("down_scaled", self.CUBE_VERTS, self.CUBE_FACES)
+        try:
+            obj.scale = (3.0, 3.0, 3.0)
+            bpy.context.view_layer.update()
+            found = utils.get_downward_faces(bm, 0.0, 5.0, matrix_world=obj.matrix_world)
+            self.assertEqual(found, [0])
+        finally:
+            drop(bm, obj, mesh)
+
+    def test_area_threshold_uses_world_space_area(self):
+        """面积阈值按世界空间面积比较：均匀放大 3 倍后面积为 9 倍"""
+        bm, obj, mesh = make_bmesh("down_area_uniform", self.CUBE_VERTS, self.CUBE_FACES)
+        try:
+            obj.scale = (3.0, 3.0, 3.0)
+            bpy.context.view_layer.update()
+            # 底面局部面积 = 2*2 = 4；世界面积 = 4 * 3² = 36
+            self.assertEqual(utils.get_downward_faces(bm, 30.0, 5.0), [])
+            self.assertEqual(
+                utils.get_downward_faces(bm, 30.0, 5.0, matrix_world=obj.matrix_world),
+                [0],
+            )
+        finally:
+            drop(bm, obj, mesh)
+
+    def test_area_threshold_uses_world_space_area_non_uniform(self):
+        """非均匀缩放：只在 X 方向放大 3 倍时，底面世界面积为 4 * 3 = 12"""
+        bm, obj, mesh = make_bmesh("down_area_scaled_x", self.CUBE_VERTS, self.CUBE_FACES)
+        try:
+            obj.scale = (3.0, 1.0, 1.0)
+            bpy.context.view_layer.update()
+            self.assertEqual(utils.get_downward_faces(bm, 10.0, 5.0), [])
+            self.assertEqual(
+                utils.get_downward_faces(bm, 10.0, 5.0, matrix_world=obj.matrix_world),
+                [0],
+            )
+        finally:
+            drop(bm, obj, mesh)
+
+
+# ---------------------------------------------------------------------------
 # BMesh 会话复用
 # ---------------------------------------------------------------------------
 
