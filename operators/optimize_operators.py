@@ -42,7 +42,7 @@ def _do_suggest_dense_vertices(context):
 
     for obj in utils.get_target_mesh_objects(context):
         with utils.bmesh_from_object(obj) as bm:
-            dense_verts = utils.get_dense_vertices(bm, distance, count)
+            dense_verts = utils.get_dense_vertices(bm, distance, count, obj=obj)
             if dense_verts:
                 data[obj] = dense_verts
                 total_count += len(dense_verts)
