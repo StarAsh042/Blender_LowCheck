@@ -179,6 +179,7 @@ class BMeshSession:
     __slots__ = (
         "_cache", "_cached_verts",
         "_objects", "_objects_ctx", "_objects_only_selected",
+        "_kernel_inputs",
     )
 
     def __init__(self):
@@ -187,6 +188,8 @@ class BMeshSession:
         self._objects = None
         self._objects_ctx = None
         self._objects_only_selected = None
+        #: obj.name -> (obj, inputs)。内核摊平结果在本会话内复用。
+        self._kernel_inputs = {}
 
     def _release(self, key):
         """释放并移除一个缓存条目，同时归还其占用的顶点预算"""
@@ -199,6 +202,27 @@ class BMeshSession:
         except Exception:  # pragma: no cover - 释放失败不应影响流程
             pass
         self._cached_verts -= vertex_count
+
+    def cached_kernel_inputs(self, obj):
+        """
+        返回本会话内已缓存的物体内核输入；未命中或缓存失效返回 None。
+
+        与 :meth:`get` 同理：缓存键是对象名，命中时**必须用 ``is`` 校验
+        对象身份**——Blender 中对象被删除后名字会被新对象复用，仅比对名字
+        可能返回另一个物体的摊平结果。
+        """
+        entry = self._kernel_inputs.get(obj.name)
+        if entry is None:
+            return None
+        cached_obj, inputs = entry
+        if cached_obj is not obj:
+            del self._kernel_inputs[obj.name]
+            return None
+        return inputs
+
+    def store_kernel_inputs(self, obj, inputs):
+        """缓存物体的内核摊平结果，供同一会话内的后续检测复用"""
+        self._kernel_inputs[obj.name] = (obj, inputs)
 
     def get(self, obj):
         """
@@ -546,6 +570,10 @@ def kernel_inputs(obj=None, bm=None):
     3.8 倍，但 ``array.array`` 转 ``Vec`` 比 list 贵 4.5 ms，净收益为 1.9 倍）。
     任何环节失败都静默回退到 :func:`_vertex_kernel_inputs`，不影响正确性。
 
+    若处于 :func:`detection_session` 上下文中，结果会按物体缓存——一次
+    「运行全部检查」里共线 / 未焊接 / 密集三个检测都会调用本函数，而同一
+    物体的摊平结果是相同的，缓存可省掉后两次摊平。
+
     .. important::
        批量取数依赖一个隐含契约：**``obj.data`` 的顶点顺序必须与 ``bm.verts``
        一致**。当前 :func:`_build_bmesh` 用 ``bm.from_mesh(mesh)``（不应用
@@ -563,6 +591,14 @@ def kernel_inputs(obj=None, bm=None):
     if bm is None:
         raise ValueError("kernel_inputs 需要 bm 参数")
 
+    # 会话内缓存：同一物体在一次批处理里只需摊平一次
+    session = _CURRENT_SESSION
+    if session is not None and obj is not None:
+        cached = session.cached_kernel_inputs(obj)
+        if cached is not None:
+            return cached
+
+    inputs = None
     mesh = getattr(obj, "data", None)
     if mesh is not None:
         try:
@@ -576,11 +612,16 @@ def kernel_inputs(obj=None, bm=None):
             # 长度不符说明取数不完整，必须回退而不是带着错数据继续。
             if len(points) == n_verts * 3 and len(edges) == n_edges * 2:
                 boundary = [bool(vert.is_boundary) for vert in bm.verts]
-                return points, edges, boundary
+                inputs = (points, edges, boundary)
         except Exception as exc:  # noqa: BLE001 - 批量取数失败必须能回退
             log_exception("foreach_get 批量取数失败，回退到 Python 摊平", exc)
 
-    return _vertex_kernel_inputs(bm)
+    if inputs is None:
+        inputs = _vertex_kernel_inputs(bm)
+
+    if session is not None and obj is not None:
+        session.store_kernel_inputs(obj, inputs)
+    return inputs
 
 
 def _vertex_kernel_inputs(bm):

@@ -212,5 +212,102 @@ class TestKernelInputsFallback(unittest.TestCase):
             utils.kernel_inputs(obj=None, bm=None)
 
 
+class TestKernelInputsSessionCache(unittest.TestCase):
+    """会话内缓存：同一物体在一次批处理里只摊平一次"""
+
+    def setUp(self):
+        self._owned = []
+
+    def tearDown(self):
+        for obj, mesh, bm in self._owned:
+            bm.free()
+            bpy.data.objects.remove(obj, do_unlink=True)
+            bpy.data.meshes.remove(mesh)
+
+    def _make(self, name, n=6):
+        obj, mesh, bm = _make_grid(n=n, jitter=True)
+        self._owned.append((obj, mesh, bm))
+        return obj, mesh, bm
+
+    def test_session_returns_same_object_on_second_call(self):
+        """会话内第二次调用应命中缓存——用 is 断言直接证明「没重算」"""
+        obj, _mesh, bm = self._make('cache_hit')
+
+        with utils.detection_session():
+            first = utils.kernel_inputs(obj, bm)
+            second = utils.kernel_inputs(obj, bm)
+
+        self.assertIs(first, second,
+                      "会话内第二次调用返回了不同对象，说明缓存未生效")
+
+    def test_cache_is_per_object(self):
+        """不同物体必须各有自己的缓存，不能互相串用"""
+        obj_a, _m_a, bm_a = self._make('cache_a', n=5)
+        obj_b, _m_b, bm_b = self._make('cache_b', n=7)
+
+        with utils.detection_session():
+            inputs_a = utils.kernel_inputs(obj_a, bm_a)
+            inputs_b = utils.kernel_inputs(obj_b, bm_b)
+            inputs_a2 = utils.kernel_inputs(obj_a, bm_a)
+
+        self.assertIs(inputs_a, inputs_a2, "物体 A 的缓存未生效")
+        self.assertIsNot(inputs_a, inputs_b, "物体 A 与 B 的缓存串了")
+
+    def test_cache_data_is_still_correct(self):
+        """命中缓存返回的数据必须与手动摊平一致"""
+        obj, _mesh, bm = self._make('cache_correct', n=6)
+
+        with utils.detection_session():
+            utils.kernel_inputs(obj, bm)               # 第一次：填充缓存
+            cached_again = utils.kernel_inputs(obj, bm)  # 第二次：命中
+
+        manual = utils._vertex_kernel_inputs(bm)
+        for got, want in zip(cached_again, manual):
+            self.assertEqual(list(got), want)
+
+    def test_no_cache_outside_session(self):
+        """会话外不应缓存——每次都重新摊平（返回新对象）"""
+        obj, _mesh, bm = self._make('no_cache', n=4)
+
+        first = utils.kernel_inputs(obj, bm)
+        second = utils.kernel_inputs(obj, bm)
+
+        self.assertIsNot(first, second,
+                         "会话外也返回了同一对象，说明缓存泄漏到了会话外")
+
+    def test_detection_results_unchanged_with_cache(self):
+        """开了缓存之后，三个内核检测的结果必须与不开缓存时一致"""
+        obj, _mesh, bm = self._make('cache_results', n=6)
+
+        results_no_session = {
+            label: sorted(fn(bm, obj=obj))
+            for label, fn in (
+                ("collinear", utils.get_collinear_vertices),
+                ("unwelded", utils.get_unwelded_vertices),
+                ("dense", utils.get_dense_vertices),
+            )
+        }
+
+        with utils.detection_session():
+            # 同一物体跑三遍，命中缓存的应是后两次
+            results_with_session = {}
+            for label, fn in (
+                ("collinear", utils.get_collinear_vertices),
+                ("unwelded", utils.get_unwelded_vertices),
+                ("dense", utils.get_dense_vertices),
+            ):
+                results_with_session[label] = sorted(fn(bm, obj=obj))
+                results_with_session[label + "_again"] = sorted(fn(bm, obj=obj))
+
+        self.assertEqual(results_no_session["collinear"],
+                         results_with_session["collinear"])
+        self.assertEqual(results_no_session["unwelded"],
+                         results_with_session["unwelded"])
+        self.assertEqual(results_no_session["dense"],
+                         results_with_session["dense"])
+        self.assertEqual(results_with_session["collinear"],
+                         results_with_session["collinear_again"])
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2, argv=[""])
