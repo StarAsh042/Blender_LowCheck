@@ -45,13 +45,16 @@ COUNT_PROPERTIES = registry.count_properties('check')
 _store_result = store_result
 
 
-def _collect_over_meshes(context, extractor):
+def _collect_over_meshes(context, extractor, pass_obj=False):
     """
     对每个目标物体执行 ``extractor(bm)``，收集非空结果。
 
     Args:
         context: Blender 上下文
-        extractor: callable(BMesh) -> list[int]
+        extractor: callable(BMesh) -> list[int]；当 ``pass_obj`` 为 True 时
+            签名为 callable(obj, BMesh) -> list[int]
+        pass_obj: 是否把物体一并传给 extractor。内核检测需要 ``obj.data``
+            做 ``foreach_get`` 批量取数，故开启（见 :func:`utils.kernel_inputs`）
 
     Returns:
         tuple: (data 字典 {obj: [索引...]}, 元素总数)
@@ -60,7 +63,7 @@ def _collect_over_meshes(context, extractor):
     total = 0
     for obj in utils.get_target_mesh_objects(context):
         with utils.bmesh_from_object(obj) as bm:
-            items = extractor(bm)
+            items = extractor(obj, bm) if pass_obj else extractor(bm)
             if items:
                 data[obj] = items
                 total += len(items)
@@ -139,7 +142,9 @@ def _do_check_unwelded_vertices(context):
     props = context.scene.lowpoly
     threshold = props.unwelded_threshold
     data, total = _collect_over_meshes(
-        context, lambda bm: utils.get_unwelded_vertices(bm, threshold)
+        context,
+        lambda obj, bm: utils.get_unwelded_vertices(bm, threshold, obj=obj),
+        pass_obj=True,
     )
     props.unwelded_vert_count = total
     _store_result(check_results, 'unwelded_vertices', data, 'VERT')
@@ -151,7 +156,9 @@ def _do_check_collinear_vertices(context):
     props = context.scene.lowpoly
     threshold = props.collinear_threshold
     data, total = _collect_over_meshes(
-        context, lambda bm: utils.get_collinear_vertices(bm, threshold)
+        context,
+        lambda obj, bm: utils.get_collinear_vertices(bm, threshold, obj=obj),
+        pass_obj=True,
     )
     props.collinear_vert_count = total
     _store_result(check_results, 'collinear_vertices', data, 'VERT')
