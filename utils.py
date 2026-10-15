@@ -1199,6 +1199,17 @@ def is_face_concave(face):
     **绝对**长度阈值 ``ZERO_THRESHOLD``（0.0001），因此边长小于该值的面
     会被视为退化面并直接返回 False。
 
+    .. note::
+       四条边向量与其长度**预先算好**再进判定循环。
+
+       原实现在循环内现算 ``edge1`` / ``edge2``，而第 ``i`` 轮的 ``edge2``
+       恰是第 ``i+1`` 轮的 ``edge1``——8 次向量减法与 8 次开方里各有一半是
+       重复计算。摊平后减到 4 次减法 + 4 次开方，**判定逻辑与判据完全不变**。
+
+       另外原实现在循环内还逐边调 ``_is_valid_vector`` 复核零长度——那与下方
+       的退化边判据是同一条件（``length_squared >= ZERO_THRESHOLD ** 2``），
+       既已提前排除，循环内再复核永不会触发，故一并移除。
+
     Args:
         face: BMesh面对象
 
@@ -1210,9 +1221,13 @@ def is_face_concave(face):
 
     verts = [v.co for v in face.verts]
 
+    # 摊平四条边向量与长度，避免循环内重复计算（见上方 note）
+    edges = [verts[(i + 1) % 4] - verts[i] for i in range(4)]
+    lengths = [edge.length for edge in edges]
+
     # 边界验证：检查是否有相邻顶点重合（退化边）
-    for i in range(4):
-        if (verts[i] - verts[(i + 1) % 4]).length_squared < ZERO_THRESHOLD * ZERO_THRESHOLD:
+    for length in lengths:
+        if length * length < ZERO_THRESHOLD * ZERO_THRESHOLD:
             # 退化四边形，无法判断凹凸性
             return False
 
@@ -1221,16 +1236,10 @@ def is_face_concave(face):
     # 若某组叉积相反，则该四边形为凹四边形。
     prev_sign = 0
     for i in range(4):
-        a = verts[i]
-        b = verts[(i + 1) % 4]
-        c = verts[(i + 2) % 4]
-
-        edge1 = b - a
-        edge2 = c - b
-
-        # 同样保护零长度边
-        if not _is_valid_vector(edge1) or not _is_valid_vector(edge2):
-            return False
+        edge1 = edges[i]
+        edge2 = edges[(i + 1) % 4]
+        len1 = lengths[i]
+        len2 = lengths[(i + 1) % 4]
 
         cross = edge1.cross(edge2)
 
@@ -1238,7 +1247,7 @@ def is_face_concave(face):
         # ``|sin θ|``，与模型尺度无关。若直接拿叉积的模（量纲为长度²）与
         # 固定容差比较，小尺寸面会因叉积天然很小而被误判为「共线角」跳过，
         # 大尺寸面则相反 —— 这正是本函数此前的问题。
-        sin_angle = cross.length / (edge1.length * edge2.length)
+        sin_angle = cross.length / (len1 * len2)
         if sin_angle < CONCAVITY_TOLERANCE:
             # 两条边几乎共线，该角的转向无法可靠判断，跳过
             continue
