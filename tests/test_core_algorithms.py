@@ -165,17 +165,77 @@ class TestCalculateFacePlanarity(unittest.TestCase):
 
     def test_collinear_first_three_verts_fallback(self):
         """
-        前三点共线时走「回退法线」分支，函数不应崩溃
+        前三点**精确**共线时走「回退法线」分支，返回 0.0
 
-        数学说明: 四边形中若有 3 个顶点共线，则 4 点必然共面，
-                  因此正确结果就是 0.0（平面）。本用例用于锁定
-                  「回退分支不会抛异常且仍返回正确值」这一行为。
+        注意：本用例的四点恰好共面（v1 在 v0→v2 线段上，必在
+        v0/v2/v3 所定平面内），所以结果是 0.0。但这**不是普遍规律**——
+        「四边形有三点共线 ⇒ 四点共面」是错的，共面的只是这一例的几何。
+        这里锁定的是「回退分支不抛异常且对共面几何给 0」。
         """
         bm, obj, mesh = create_test_mesh("CollinearFirst3", [
             (0, 0, 0), (0.5, 0, 0), (1, 0, 0), (0.5, 1, 0.5),
         ], [(0, 1, 2, 3)])
         self.assertEqual(calculate_face_planarity(bm.faces[0]), 0.0)
         cleanup_test_data(bm, obj, mesh)
+
+    def test_near_collinear_first_three_uses_fallback(self):
+        """
+        前三点**近**共线时必须走回退，而不是拿噪声法线算垃圾值。
+
+        回归：原实现的退化判据是 ``geometry.normal(...).length_squared
+        < EPSILON``，而 ``geometry.normal`` 返回**单位向量**——归一化后
+        长度恒为 1，该判据只在**精确**共线时成立，对近共线面永不触发。
+        于是近共线面拿到一个由浮点噪声主导方向的「法线」，平面度是垃圾
+        （实测：本例旧实现返回 0.2，而它其实几乎是平面）。
+
+        本例前三点夹角正弦 ~1e-9（远低于 COLLINEAR_SIN_THRESHOLD=1e-6），
+        且四点共面，故正确结果应≈0。
+        """
+        bm, obj, mesh = create_test_mesh("NearCollinear", [
+            (0, 0, 0), (1, 0, 0), (2, 1e-9, 0), (0.5, 0.3, 0.2),
+        ], [(0, 1, 2, 3)])
+        result = calculate_face_planarity(bm.faces[0])
+        self.assertLess(result, 1e-6,
+                        f"近共线面应走回退分支得到≈0，实得 {result}")
+        cleanup_test_data(bm, obj, mesh)
+
+    def test_collinear_guard_is_scale_invariant(self):
+        """
+        共线判据必须**无量纲**：同一形状在不同尺度下结论一致。
+
+        回归风险：若改用绝对长度阈值（如 |cross| < 常数），小尺度模型上
+        正常面会被误判为退化。实测踩坑过——边长 3 厘米的正常四边形面，
+        |cross|² ≈ 8e-8，会小于 1e-6 量级的绝对阈值。
+        """
+        for scale in (1.0, 0.03, 0.001, 1e-4):
+            verts = [
+                (0, 0, 0),
+                (1 * scale, 0, 0),
+                (2 * scale, 1e-3 * scale, 0),
+                (0.5 * scale, 0.3 * scale, 0.2 * scale),
+            ]
+            bm, obj, mesh = create_test_mesh(f"Scale{scale}", verts,
+                                             [(0, 1, 2, 3)])
+            # 良态面（夹角正弦 1e-3 > 阈值），各尺度应得到同一结论
+            result = calculate_face_planarity(bm.faces[0])
+            self.assertGreater(result, 0.0,
+                               f"尺度 {scale} 下良态面被判成退化了")
+            cleanup_test_data(bm, obj, mesh)
+
+    def test_nearly_collinear_helper(self):
+        """/_nearly_collinear/ 本身的行为：无量纲、零边也判共线"""
+        from Blender_LowCheck.utils import _nearly_collinear
+        from mathutils import Vector
+
+        # 平行（夹角正弦 0）→ 共线
+        self.assertTrue(_nearly_collinear(Vector((1, 0, 0)), Vector((2, 0, 0))))
+        # 垂直（夹角正弦 1）→ 不共线
+        self.assertFalse(_nearly_collinear(Vector((1, 0, 0)), Vector((0, 1, 0))))
+        # 尺度无关：同样夹角，放大 1e6 倍结论不变
+        self.assertTrue(_nearly_collinear(Vector((1e6, 0, 0)),
+                                          Vector((2e6, 1e-3, 0))))
+        # 零长度边 → 共线（退化）
+        self.assertTrue(_nearly_collinear(Vector((0, 0, 0)), Vector((1, 0, 0))))
 
     def test_all_collinear_returns_zero(self):
         """所有点共线时退化为 0.0"""
