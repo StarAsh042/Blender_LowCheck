@@ -26,6 +26,18 @@ ZERO_THRESHOLD = 0.0001
 DEGENERATE_ANGLE_TOLERANCE = 0.001
 CONCAVITY_TOLERANCE = 0.001
 
+#: 判定「三点近乎共线」的无量纲阈值（两条边夹角的正弦）。
+#:
+#: 为什么必须无量纲：网格坐标是 float32（相对精度 ~1e-7），叉积模长随模型
+#: 尺度平方变化——1 米尺度下面法线的叉积 ~1，1 厘米尺度下 ~1e-4。若用绝对
+#: 长度阈值，小尺度模型上的正常四边形面会被误判为退化（已实测踩坑：
+#: 边长 3 厘米时 |cross|² ≈ 8e-8，小于任何 ~1e-6 量级的绝对阈值）。
+#:
+#: 方向误差量级约 ``1e-7 / sin θ``，故 sin θ 低于 1e-6 时法线方向已由浮点
+#: 噪声主导，此时算出的「平面度」是垃圾值，应改走回退分支。
+#: 与 ``CONCAVITY_TOLERANCE`` 同一思路：判据用无量纲量，与尺度无关。
+COLLINEAR_SIN_THRESHOLD = 1e-6
+
 #: 批量检测会话中允许缓存的顶点总数上限，避免大场景下内存膨胀
 MAX_CACHED_VERTEX_COUNT = 2_000_000
 
@@ -1227,12 +1239,40 @@ def get_zero_area_faces(bm, threshold=0.0001):
     return zero_faces
 
 
+def _nearly_collinear(edge1, edge2):
+    """
+    判断两条边是否近乎共线（夹角正弦低于 :data:`COLLINEAR_SIN_THRESHOLD`）。
+
+    共线判据必须**无量纲**：``|edge1 × edge2| / (|edge1| * |edge2|)`` 即两边
+    夹角的正弦。若改用绝对长度阈值，小尺度模型上的正常面会被误判为退化
+    （原因见 ``COLLINEAR_SIN_THRESHOLD`` 的注释）。
+
+    Args:
+        edge1: 第一条边向量
+        edge2: 第二条边向量
+
+    Returns:
+        bool: 近乎共线（或任一边为零长度）时返回 True
+    """
+    len1 = edge1.length
+    len2 = edge2.length
+    if len1 == 0.0 or len2 == 0.0:
+        return True
+    return edge1.cross(edge2).length < COLLINEAR_SIN_THRESHOLD * len1 * len2
+
+
 def calculate_face_planarity(face):
     """
     计算四边形的平面度（用于检测扭曲四边面）
 
-    原理: 计算每个顶点到最佳拟合平面的距离，
-         距离越大说明四边面越扭曲（不共面）
+    原理: 取一个参考平面（过前三点，或前三点共线时过 v0/v2/v3），
+          计算四个顶点到该平面的最大距离；
+          距离越大说明四边面越扭曲（不共面）
+
+    边界情况:
+      - 非四边形 → 返回 0.0
+      - 前三点近乎共线 → 回退用 v0/v2/v3 定平面
+      - 两组都近乎共线 → 整个四边形退化，视为共面，返回 0.0
 
     Args:
         face: BMesh面对象
@@ -1245,16 +1285,20 @@ def calculate_face_planarity(face):
 
     verts = [v.co for v in face.verts]
 
-    # 计算面的法线（使用前三点）
-    normal = geometry.normal(verts[0], verts[1], verts[2])
-
-    # 前三点共线时回退到另一组三点
-    if normal.length_squared < EPSILON:
+    # 前三点共线时回退到另一组三点。
+    #
+    # ⚠ 这里不能直接判 `geometry.normal(...).length_squared < EPSILON`：
+    # `geometry.normal` **返回的是单位向量**，归一化后长度恒为 1，该判据
+    # 只在精确共线（叉积恰为 0）时才成立，对**近**共线面永不触发——那些面
+    # 会拿到一个由浮点噪声主导方向的「法线」，平面度是垃圾值。
+    # 故先用叉积自行判断，再交给 geometry.normal 算具体方向。
+    if _nearly_collinear(verts[1] - verts[0], verts[2] - verts[0]):
+        # 回退组也共线 → 四点整体退化，视为共面
+        if _nearly_collinear(verts[2] - verts[0], verts[3] - verts[0]):
+            return 0.0
         normal = geometry.normal(verts[0], verts[2], verts[3])
-
-    # 如果所有点共线则退化，视为共面
-    if normal.length_squared < EPSILON:
-        return 0.0
+    else:
+        normal = geometry.normal(verts[0], verts[1], verts[2])
 
     normal.normalize()
 
