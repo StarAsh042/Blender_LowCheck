@@ -15,6 +15,7 @@
 """
 
 import os
+import re
 import sys
 import unittest
 
@@ -22,6 +23,34 @@ import addon_utils  # noqa: E402  (Blender 内置模块)
 import bpy  # noqa: E402
 
 ADDON_NAME = "Blender_LowCheck"
+
+#: 仓库根目录（本测试文件位于 <repo>/tests/ 下）
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+def _repo_declared_version():
+    """
+    从仓库源码的 ``bl_info`` 读出声明的版本号。
+
+    期望值原本硬编码为 ``(1, 0, 0)``——每次发版都要记得改这里，忘记改就报
+    一个误导性的「版本必须与 README/CHANGELOG 声明的 1.0.0 一致」。
+    本测试的真正意图是「**打包过程没有改动版本号**」，所以期望值应该来自
+    被打包的源码，而不是另一处硬编码。
+
+    直接读源文件而不 import：本测试的职责是对比「ZIP 里的副本」与「仓库
+    源码」，import 仓库包会把两者混为一谈。
+
+    Returns:
+        tuple[int, int, int]: 源码中声明的版本号
+    """
+    init_py = os.path.join(REPO_ROOT, "__init__.py")
+    with open(init_py, encoding="utf-8") as fh:
+        text = fh.read()
+    match = re.search(
+        r'"version"\s*:\s*\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)', text)
+    if match is None:
+        raise AssertionError(f"无法从 {init_py} 解析 bl_info 的 version")
+    return tuple(int(part) for part in match.groups())
 
 
 class TestAddonInstall(unittest.TestCase):
@@ -52,8 +81,9 @@ class TestAddonInstall(unittest.TestCase):
         info = module.bl_info
         self.assertEqual(info.get("category"), "Mesh")
         self.assertEqual(
-            tuple(info.get("version", (0,))), (1, 0, 0),
-            "bl_info 版本必须与 README/CHANGELOG 声明的 1.0.0 一致",
+            tuple(info.get("version", (0,))), _repo_declared_version(),
+            "安装副本的 bl_info 版本必须与仓库源码声明一致"
+            "（打包过程不应改动版本号）",
         )
 
         # 确认扫描到的正是本次测试部署的副本（而不是别处的同名插件）
