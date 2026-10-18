@@ -12,6 +12,8 @@
 
 import bpy
 
+from .. import i18n
+
 from .base import (
     LowPolyBaseOperator,
     format_found,
@@ -78,7 +80,7 @@ def _do_check_ngon(context):
     )
     props.ngon_count = total
     _store_result(check_results, 'ngon_faces', data, 'FACE')
-    return format_found("N-gon面", total)
+    return format_found("ngon_faces", total)
 
 
 def _do_check_overlapping_faces(context):
@@ -87,7 +89,7 @@ def _do_check_overlapping_faces(context):
     data, total = _collect_over_meshes(context, utils.get_faces_sharing_all_edges)
     props.overlapping_face_count = total
     _store_result(check_results, 'overlapping_faces', data, 'FACE')
-    return format_found("重叠面", total)
+    return format_found("overlapping_faces", total)
 
 
 def _do_check_wrong_normals(context):
@@ -96,7 +98,7 @@ def _do_check_wrong_normals(context):
     data, total = _collect_over_meshes(context, utils.get_wrong_normal_faces)
     props.wrong_normal_count = total
     _store_result(check_results, 'wrong_normals', data, 'FACE')
-    return format_found("法线错误的面", total)
+    return format_found("wrong_normals", total)
 
 
 def _do_check_non_manifold_edges(context):
@@ -105,7 +107,7 @@ def _do_check_non_manifold_edges(context):
     data, total = _collect_over_meshes(context, utils.get_non_manifold_edges)
     props.non_manifold_edge_count = total
     _store_result(check_results, 'non_manifold_edges', data, 'EDGE')
-    return format_found("非流形边", total)
+    return format_found("non_manifold_edges", total)
 
 
 def _do_check_loose_geometry(context):
@@ -131,10 +133,12 @@ def _do_check_loose_geometry(context):
 
     parts = []
     if total_verts > 0:
-        parts.append(f"{total_verts} 个悬浮顶点")
+        parts.append(i18n.translate("{count} loose vertices").format(count=total_verts))
     if total_edges > 0:
-        parts.append(f"{total_edges} 条悬浮边")
-    return "找到 " + "、".join(parts) if parts else "未找到孤立几何体"
+        parts.append(i18n.translate("{count} loose edges").format(count=total_edges))
+    if parts:
+        return i18n.translate("Found {parts}").format(parts=", ".join(parts))
+    return i18n.translate("No loose geometry found")
 
 
 def _do_check_unwelded_vertices(context):
@@ -148,7 +152,7 @@ def _do_check_unwelded_vertices(context):
     )
     props.unwelded_vert_count = total
     _store_result(check_results, 'unwelded_vertices', data, 'VERT')
-    return format_found("未焊接点", total)
+    return format_found("unwelded_vertices", total)
 
 
 def _do_check_collinear_vertices(context):
@@ -162,7 +166,7 @@ def _do_check_collinear_vertices(context):
     )
     props.collinear_vert_count = total
     _store_result(check_results, 'collinear_vertices', data, 'VERT')
-    return format_found("共线顶点", total)
+    return format_found("collinear_vertices", total)
 
 
 def _do_check_degenerate_geometry(context):
@@ -202,10 +206,12 @@ def _do_check_degenerate_geometry(context):
 
     parts = []
     if total_edges > 0:
-        parts.append(f"{total_edges} 条退化边")
+        parts.append(i18n.translate("{count} degenerate edges").format(count=total_edges))
     if total_faces > 0:
-        parts.append(f"{total_faces} 个退化面")
-    return "找到 " + "、".join(parts) if parts else "未找到退化几何体"
+        parts.append(i18n.translate("{count} degenerate faces").format(count=total_faces))
+    if parts:
+        return i18n.translate("Found {parts}").format(parts=", ".join(parts))
+    return i18n.translate("No degenerate geometry found")
 
 
 def _do_check_distorted_quads(context):
@@ -223,7 +229,7 @@ def _do_check_distorted_quads(context):
     data, total = _collect_over_meshes(context, extract)
     props.distorted_quad_count = total
     _store_result(check_results, 'distorted_quads', data, 'FACE')
-    return format_found("非平面四边面", total)
+    return format_found("distorted_quads", total)
 
 
 def _do_check_concave_quads(context):
@@ -240,7 +246,7 @@ def _do_check_concave_quads(context):
     data, total = _collect_over_meshes(context, extract)
     props.concave_quad_count = total
     _store_result(check_results, 'concave_quads', data, 'FACE')
-    return format_found("内凹四边面", total)
+    return format_found("concave_quads", total)
 
 
 #: 检测项键 → 检测函数（与 ``registry.CHECKS`` 的 ``key`` 一一对应）
@@ -280,8 +286,8 @@ def get_check_pipeline():
 class LOWPOLY_OT_check_ngon_faces(bpy.types.Operator, LowPolyBaseOperator):
     """检查N-gon面"""
     bl_idname = "lowpoly.check_ngon_faces"
-    bl_label = "检查N-gon面"
-    bl_description = "检查多于4边的面"
+    bl_label = "Check N-gon Faces"
+    bl_description = "Detect faces with more than 4 edges"
 
     def execute(self, context):
         self.report({'INFO'}, _do_check_ngon(context))
@@ -292,8 +298,8 @@ class LOWPOLY_OT_select_ngon_faces(bpy.types.Operator, LowPolyBaseOperator):
     """选择N-gon面"""
     bl_options = {'REGISTER', 'UNDO'}
     bl_idname = "lowpoly.select_ngon_faces"
-    bl_label = "选择N-gon面"
-    bl_description = "选择已检查出的N-gon面"
+    bl_label = "Select N-gon Faces"
+    bl_description = "Select the N-gon faces found by the check"
 
     def execute(self, context):
         return self._execute_sub_element_select(context, check_results, 'ngon_faces', 'FACE', 'N-gon面')
@@ -302,8 +308,8 @@ class LOWPOLY_OT_select_ngon_faces(bpy.types.Operator, LowPolyBaseOperator):
 class LOWPOLY_OT_check_overlapping_faces(bpy.types.Operator, LowPolyBaseOperator):
     """检查重叠面"""
     bl_idname = "lowpoly.check_overlapping_faces"
-    bl_label = "检查重叠面"
-    bl_description = "检查共用所有边的重叠面"
+    bl_label = "Check Overlapping Faces"
+    bl_description = "Detect faces that share all their edges"
 
     def execute(self, context):
         self.report({'INFO'}, _do_check_overlapping_faces(context))
@@ -314,8 +320,8 @@ class LOWPOLY_OT_select_overlapping_faces(bpy.types.Operator, LowPolyBaseOperato
     """选择重叠面"""
     bl_options = {'REGISTER', 'UNDO'}
     bl_idname = "lowpoly.select_overlapping_faces"
-    bl_label = "选择重叠面"
-    bl_description = "选择已检查出的重叠面"
+    bl_label = "Select Overlapping Faces"
+    bl_description = "Select the overlapping faces found by the check"
 
     def execute(self, context):
         return self._execute_sub_element_select(context, check_results, 'overlapping_faces', 'FACE', '重叠面')
@@ -324,8 +330,8 @@ class LOWPOLY_OT_select_overlapping_faces(bpy.types.Operator, LowPolyBaseOperato
 class LOWPOLY_OT_check_wrong_normals(bpy.types.Operator, LowPolyBaseOperator):
     """检查错误法线（反法线/朝内的面）"""
     bl_idname = "lowpoly.check_wrong_normals"
-    bl_label = "检查错误法线"
-    bl_description = "检测法线朝向与大多数面相反的面"
+    bl_label = "Check Wrong Normals"
+    bl_description = "Detect faces whose normal points against the majority"
 
     def execute(self, context):
         self.report({'INFO'}, _do_check_wrong_normals(context))
@@ -336,8 +342,8 @@ class LOWPOLY_OT_select_wrong_normals(bpy.types.Operator, LowPolyBaseOperator):
     """选择错误法线面（反法线/朝内的面）"""
     bl_options = {'REGISTER', 'UNDO'}
     bl_idname = "lowpoly.select_wrong_normals"
-    bl_label = "选择错误法线面"
-    bl_description = "选择已检测出的法线朝内的面"
+    bl_label = "Select Wrong-normal Faces"
+    bl_description = "Select the inward-facing faces found by the check"
 
     def execute(self, context):
         return self._execute_sub_element_select(context, check_results, 'wrong_normals', 'FACE', '法线朝内的面')
@@ -346,8 +352,8 @@ class LOWPOLY_OT_select_wrong_normals(bpy.types.Operator, LowPolyBaseOperator):
 class LOWPOLY_OT_check_non_manifold_edges(bpy.types.Operator, LowPolyBaseOperator):
     """检查非流形边"""
     bl_idname = "lowpoly.check_non_manifold_edges"
-    bl_label = "检查非流形边"
-    bl_description = "检测被3个及以上面共用的非流形边"
+    bl_label = "Check Non-manifold Edges"
+    bl_description = "Detect edges shared by 3 or more faces"
 
     def execute(self, context):
         self.report({'INFO'}, _do_check_non_manifold_edges(context))
@@ -358,8 +364,8 @@ class LOWPOLY_OT_select_non_manifold_edges(bpy.types.Operator, LowPolyBaseOperat
     """选择非流形边"""
     bl_options = {'REGISTER', 'UNDO'}
     bl_idname = "lowpoly.select_non_manifold_edges"
-    bl_label = "选择非流形边"
-    bl_description = "选择已检测出的非流形边"
+    bl_label = "Select Non-manifold Edges"
+    bl_description = "Select the non-manifold edges found by the check"
 
     def execute(self, context):
         return self._execute_sub_element_select(context, check_results, 'non_manifold_edges', 'EDGE', '非流形边')
@@ -368,8 +374,8 @@ class LOWPOLY_OT_select_non_manifold_edges(bpy.types.Operator, LowPolyBaseOperat
 class LOWPOLY_OT_check_loose_geometry(bpy.types.Operator, LowPolyBaseOperator):
     """检查孤立几何体"""
     bl_idname = "lowpoly.check_loose_geometry"
-    bl_label = "检查孤立几何体"
-    bl_description = "检测悬浮顶点和悬浮边（不属于任何面的几何体）"
+    bl_label = "Check Loose Geometry"
+    bl_description = "Detect loose vertices and edges (not used by any face)"
 
     def execute(self, context):
         self.report({'INFO'}, _do_check_loose_geometry(context))
@@ -380,8 +386,8 @@ class LOWPOLY_OT_select_loose_geometry(bpy.types.Operator, LowPolyBaseOperator):
     """选择孤立几何体"""
     bl_options = {'REGISTER', 'UNDO'}
     bl_idname = "lowpoly.select_loose_geometry"
-    bl_label = "选择孤立几何体"
-    bl_description = "选择已检测出的悬浮顶点"
+    bl_label = "Select Loose Geometry"
+    bl_description = "Select the loose vertices found by the check"
 
     def execute(self, context):
         return self._execute_sub_element_select(context, check_results, 'loose_geometry', 'VERT', '孤立几何体')
@@ -390,8 +396,8 @@ class LOWPOLY_OT_select_loose_geometry(bpy.types.Operator, LowPolyBaseOperator):
 class LOWPOLY_OT_check_unwelded_vertices(bpy.types.Operator, LowPolyBaseOperator):
     """检查未焊接点"""
     bl_idname = "lowpoly.check_unwelded_vertices"
-    bl_label = "检查未焊接点"
-    bl_description = "检查相同位置下未焊接的点"
+    bl_label = "Check Unwelded Vertices"
+    bl_description = "Detect vertices at the same position that are not welded"
 
     def execute(self, context):
         self.report({'INFO'}, _do_check_unwelded_vertices(context))
@@ -402,8 +408,8 @@ class LOWPOLY_OT_select_unwelded_vertices(bpy.types.Operator, LowPolyBaseOperato
     """选择未焊接点"""
     bl_options = {'REGISTER', 'UNDO'}
     bl_idname = "lowpoly.select_unwelded_vertices"
-    bl_label = "选择未焊接点"
-    bl_description = "选择已检查出的未焊接点"
+    bl_label = "Select Unwelded Vertices"
+    bl_description = "Select the unwelded vertices found by the check"
 
     def execute(self, context):
         return self._execute_sub_element_select(context, check_results, 'unwelded_vertices', 'VERT', '未焊接点')
@@ -412,8 +418,8 @@ class LOWPOLY_OT_select_unwelded_vertices(bpy.types.Operator, LowPolyBaseOperato
 class LOWPOLY_OT_check_collinear_vertices(bpy.types.Operator, LowPolyBaseOperator):
     """检查共线顶点"""
     bl_idname = "lowpoly.check_collinear_vertices"
-    bl_label = "检查共线顶点"
-    bl_description = "检查直线上的废点（三点共线）"
+    bl_label = "Check Collinear Vertices"
+    bl_description = "Detect wasted points on a straight line (3 collinear points)"
 
     def execute(self, context):
         self.report({'INFO'}, _do_check_collinear_vertices(context))
@@ -424,8 +430,8 @@ class LOWPOLY_OT_select_collinear_vertices(bpy.types.Operator, LowPolyBaseOperat
     """选择共线顶点"""
     bl_options = {'REGISTER', 'UNDO'}
     bl_idname = "lowpoly.select_collinear_vertices"
-    bl_label = "选择共线顶点"
-    bl_description = "选择已检查出的共线顶点"
+    bl_label = "Select Collinear Vertices"
+    bl_description = "Select the collinear vertices found by the check"
 
     def execute(self, context):
         return self._execute_sub_element_select(context, check_results, 'collinear_vertices', 'VERT', '共线顶点')
@@ -434,8 +440,8 @@ class LOWPOLY_OT_select_collinear_vertices(bpy.types.Operator, LowPolyBaseOperat
 class LOWPOLY_OT_check_degenerate_geometry(bpy.types.Operator, LowPolyBaseOperator):
     """检查退化几何体（零长度边 + 零面积面）"""
     bl_idname = "lowpoly.check_degenerate_geometry"
-    bl_label = "检查退化几何体"
-    bl_description = "检测零长度边和零面积面"
+    bl_label = "Check Degenerate Geometry"
+    bl_description = "Detect zero-length edges and zero-area faces"
 
     def execute(self, context):
         self.report({'INFO'}, _do_check_degenerate_geometry(context))
@@ -446,8 +452,8 @@ class LOWPOLY_OT_select_degenerate_geometry(bpy.types.Operator, LowPolyBaseOpera
     """选择退化几何体"""
     bl_options = {'REGISTER', 'UNDO'}
     bl_idname = "lowpoly.select_degenerate_geometry"
-    bl_label = "选择退化几何体"
-    bl_description = "选择已检测出的退化边；若没有退化边则选择退化面"
+    bl_label = "Select Degenerate Geometry"
+    bl_description = "Select degenerate edges; falls back to degenerate faces"
 
     def execute(self, context):
         return self._execute_sub_element_select(context, check_results, 'degenerate_geometry', 'EDGE', '退化几何体')
@@ -456,8 +462,8 @@ class LOWPOLY_OT_select_degenerate_geometry(bpy.types.Operator, LowPolyBaseOpera
 class LOWPOLY_OT_check_distorted_quads(bpy.types.Operator, LowPolyBaseOperator):
     """检查非平面四边面（扭曲四边面）"""
     bl_idname = "lowpoly.check_distorted_quads"
-    bl_label = "检查非平面四边面"
-    bl_description = "检查不共面的四边面（扭曲四边面）"
+    bl_label = "Check Distorted Quads"
+    bl_description = "Detect non-planar quad faces (distorted quads)"
 
     def execute(self, context):
         self.report({'INFO'}, _do_check_distorted_quads(context))
@@ -468,8 +474,8 @@ class LOWPOLY_OT_select_distorted_quads(bpy.types.Operator, LowPolyBaseOperator)
     """选择非平面四边面"""
     bl_options = {'REGISTER', 'UNDO'}
     bl_idname = "lowpoly.select_distorted_quads"
-    bl_label = "选择非平面四边面"
-    bl_description = "选择已检查出的非平面四边面"
+    bl_label = "Select Distorted Quads"
+    bl_description = "Select the distorted quads found by the check"
 
     def execute(self, context):
         return self._execute_sub_element_select(context, check_results, 'distorted_quads', 'FACE', '非平面四边面')
@@ -478,8 +484,8 @@ class LOWPOLY_OT_select_distorted_quads(bpy.types.Operator, LowPolyBaseOperator)
 class LOWPOLY_OT_check_concave_quads(bpy.types.Operator, LowPolyBaseOperator):
     """检查内凹四边面"""
     bl_idname = "lowpoly.check_concave_quads"
-    bl_label = "检查内凹四边面"
-    bl_description = "检查内凹的四边面"
+    bl_label = "Check Concave Quads"
+    bl_description = "Detect concave quad faces"
 
     def execute(self, context):
         self.report({'INFO'}, _do_check_concave_quads(context))
@@ -490,8 +496,8 @@ class LOWPOLY_OT_select_concave_quads(bpy.types.Operator, LowPolyBaseOperator):
     """选择内凹四边面"""
     bl_options = {'REGISTER', 'UNDO'}
     bl_idname = "lowpoly.select_concave_quads"
-    bl_label = "选择内凹四边面"
-    bl_description = "选择已检查出的内凹四边面"
+    bl_label = "Select Concave Quads"
+    bl_description = "Select the concave quads found by the check"
 
     def execute(self, context):
         return self._execute_sub_element_select(context, check_results, 'concave_quads', 'FACE', '内凹四边面')
@@ -500,8 +506,8 @@ class LOWPOLY_OT_select_concave_quads(bpy.types.Operator, LowPolyBaseOperator):
 class LOWPOLY_OT_run_all_checks(bpy.types.Operator, LowPolyBaseOperator):
     """运行全部检查"""
     bl_idname = "lowpoly.run_all_checks"
-    bl_label = "运行全部检查"
-    bl_description = "运行全部网格质量和场景优化检查并更新计数"
+    bl_label = "Run All Checks"
+    bl_description = "Run all mesh quality and scene optimization checks and update counts"
 
     def execute(self, context):
         check_results.clear()
@@ -509,7 +515,7 @@ class LOWPOLY_OT_run_all_checks(bpy.types.Operator, LowPolyBaseOperator):
 
         objects = utils.get_target_mesh_objects(context)
         if not objects:
-            self.report({'WARNING'}, "没有可检测的网格物体（请检查可见性或「仅处理选中物体」选项）")
+            self.report({'WARNING'}, i18n.translate("No mesh objects to check (check visibility or the \"only selected objects\" option)"))
             return {'CANCELLED'}
 
         total_verts = sum(len(obj.data.vertices) for obj in objects)
@@ -523,15 +529,15 @@ class LOWPOLY_OT_run_all_checks(bpy.types.Operator, LowPolyBaseOperator):
         failed = run_pipeline(context, pipeline, report=self.report)
 
         if not failed:
-            self.report({'INFO'}, f"全部检查已完成（共 {len(objects)} 个物体）")
+            self.report({'INFO'}, i18n.translate("All checks completed ({count} objects)").format(count=len(objects)))
         return {'FINISHED'}
 
 
 class LOWPOLY_OT_clear_results(bpy.types.Operator, LowPolyBaseOperator):
     """清除全部检测结果"""
     bl_idname = "lowpoly.clear_results"
-    bl_label = "清除检测结果"
-    bl_description = "清空所有检测结果与计数（不修改模型）"
+    bl_label = "Clear Results"
+    bl_description = "Clear all check results and counts (does not modify the model)"
     bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):

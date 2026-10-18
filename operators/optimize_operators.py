@@ -8,6 +8,8 @@
 
 import bpy
 
+from .. import i18n
+
 from .base import (
     LowPolyBaseOperator,
     format_found,
@@ -49,7 +51,7 @@ def _do_suggest_dense_vertices(context):
 
     props.dense_vert_count = total_count
     store_result(optimize_results, 'dense_vertices', data, 'VERT')
-    return format_found("密集顶点", total_count)
+    return format_found("dense_vertices", total_count)
 
 
 def _do_suggest_high_poly_objects(context):
@@ -65,7 +67,7 @@ def _do_suggest_high_poly_objects(context):
 
     props.high_poly_count = len(high_poly_objects)
     store_object_result(optimize_results, 'high_poly_objects', high_poly_objects)
-    return format_found("高面数物体", len(high_poly_objects))
+    return format_found("high_poly_objects", len(high_poly_objects))
 
 
 def _do_suggest_small_bevels(context):
@@ -85,7 +87,7 @@ def _do_suggest_small_bevels(context):
 
     props.small_bevel_count = total_count
     store_result(optimize_results, 'small_bevels', data, 'FACE')
-    return format_found("小倒角结构", total_count)
+    return format_found("small_bevels", total_count)
 
 
 def _do_suggest_downward_faces(context):
@@ -118,7 +120,7 @@ def _do_suggest_downward_faces(context):
 
     props.downward_face_count = total_count
     store_result(optimize_results, 'downward_faces', data, 'FACE')
-    return format_found("朝下水平面", total_count)
+    return format_found("downward_faces", total_count)
 
 
 def _do_suggest_intersecting_objects(context):
@@ -130,7 +132,7 @@ def _do_suggest_intersecting_objects(context):
 
     props.intersecting_object_count = len(intersecting_objects)
     store_object_result(optimize_results, 'intersecting_objects', intersecting_objects)
-    return format_found("穿插物体", len(intersecting_objects))
+    return format_found("intersecting_objects", len(intersecting_objects))
 
 
 def _do_suggest_non_uniform_scale(context):
@@ -140,7 +142,7 @@ def _do_suggest_non_uniform_scale(context):
 
     props.non_uniform_scale_count = len(non_uniform)
     store_object_result(optimize_results, 'non_uniform_scale', non_uniform)
-    return format_found("非均匀缩放物体", len(non_uniform))
+    return format_found("non_uniform_scale", len(non_uniform))
 
 
 #: 检测项键 → 优化检测函数（与 ``registry.CHECKS`` 的 ``key`` 一一对应）
@@ -173,8 +175,8 @@ def get_optimize_pipeline():
 class LOWPOLY_OT_suggest_dense_vertices(bpy.types.Operator, LowPolyBaseOperator):
     """密集顶点"""
     bl_idname = "lowpoly.suggest_dense_vertices"
-    bl_label = "密集顶点"
-    bl_description = "检测顶点过于密集的结构"
+    bl_label = "Suggest Dense Vertices"
+    bl_description = "Detect structures with overly dense vertices"
 
     def execute(self, context):
         self.report({'INFO'}, _do_suggest_dense_vertices(context))
@@ -185,8 +187,8 @@ class LOWPOLY_OT_select_dense_vertices(bpy.types.Operator, LowPolyBaseOperator):
     """选择密集顶点"""
     bl_options = {'REGISTER', 'UNDO'}
     bl_idname = "lowpoly.select_dense_vertices"
-    bl_label = "选择密集顶点"
-    bl_description = "选择已检测出的密集顶点"
+    bl_label = "Select Dense Vertices"
+    bl_description = "Select the dense vertices found by the check"
 
     def execute(self, context):
         return self._execute_sub_element_select(context, optimize_results, 'dense_vertices', 'VERT', '密集顶点')
@@ -195,8 +197,8 @@ class LOWPOLY_OT_select_dense_vertices(bpy.types.Operator, LowPolyBaseOperator):
 class LOWPOLY_OT_suggest_high_poly_objects(bpy.types.Operator, LowPolyBaseOperator):
     """高面数物体"""
     bl_idname = "lowpoly.suggest_high_poly_objects"
-    bl_label = "高面数物体"
-    bl_description = "检测面数较高的物体"
+    bl_label = "Suggest High-poly Objects"
+    bl_description = "Detect objects with a high face count"
 
     def execute(self, context):
         self.report({'INFO'}, _do_suggest_high_poly_objects(context))
@@ -207,8 +209,8 @@ class LOWPOLY_OT_select_high_poly_objects(bpy.types.Operator, LowPolyBaseOperato
     """选择高面数物体"""
     bl_options = {'REGISTER', 'UNDO'}
     bl_idname = "lowpoly.select_high_poly_objects"
-    bl_label = "选择高面数物体"
-    bl_description = "选择已检测出的高面数物体"
+    bl_label = "Select High-poly Objects"
+    bl_description = "Select the high-poly objects found by the check"
 
     def execute(self, context):
         return self._execute_sub_element_select(context, optimize_results, 'high_poly_objects', 'OBJECT', '高面数物体')
@@ -217,8 +219,8 @@ class LOWPOLY_OT_select_high_poly_objects(bpy.types.Operator, LowPolyBaseOperato
 class LOWPOLY_OT_suggest_small_bevels(bpy.types.Operator, LowPolyBaseOperator):
     """小倒角结构"""
     bl_idname = "lowpoly.suggest_small_bevels"
-    bl_label = "小倒角结构"
-    bl_description = "检测较小的倒角结构"
+    bl_label = "Suggest Small Bevels"
+    bl_description = "Detect small bevel structures"
 
     def execute(self, context):
         self.report({'INFO'}, _do_suggest_small_bevels(context))
@@ -229,8 +231,8 @@ class LOWPOLY_OT_select_small_bevels(bpy.types.Operator, LowPolyBaseOperator):
     """选择小倒角结构"""
     bl_options = {'REGISTER', 'UNDO'}
     bl_idname = "lowpoly.select_small_bevels"
-    bl_label = "选择小倒角结构"
-    bl_description = "选择已检测出的小倒角结构"
+    bl_label = "Select Small Bevels"
+    bl_description = "Select the small bevels found by the check"
 
     def execute(self, context):
         return self._execute_sub_element_select(context, optimize_results, 'small_bevels', 'FACE', '小倒角结构')
@@ -239,8 +241,8 @@ class LOWPOLY_OT_select_small_bevels(bpy.types.Operator, LowPolyBaseOperator):
 class LOWPOLY_OT_suggest_downward_faces(bpy.types.Operator, LowPolyBaseOperator):
     """朝下水平面"""
     bl_idname = "lowpoly.suggest_downward_faces"
-    bl_label = "朝下水平面"
-    bl_description = "检测水平朝下的面（可能浪费面数）"
+    bl_label = "Suggest Downward Faces"
+    bl_description = "Detect horizontal downward-facing faces (may waste faces)"
 
     def execute(self, context):
         self.report({'INFO'}, _do_suggest_downward_faces(context))
@@ -251,8 +253,8 @@ class LOWPOLY_OT_select_downward_faces(bpy.types.Operator, LowPolyBaseOperator):
     """选择朝下水平面"""
     bl_options = {'REGISTER', 'UNDO'}
     bl_idname = "lowpoly.select_downward_faces"
-    bl_label = "选择朝下水平面"
-    bl_description = "选择已检测出的朝下水平面"
+    bl_label = "Select Downward Faces"
+    bl_description = "Select the downward faces found by the check"
 
     def execute(self, context):
         return self._execute_sub_element_select(context, optimize_results, 'downward_faces', 'FACE', '朝下水平面')
@@ -261,8 +263,8 @@ class LOWPOLY_OT_select_downward_faces(bpy.types.Operator, LowPolyBaseOperator):
 class LOWPOLY_OT_suggest_intersecting_objects(bpy.types.Operator, LowPolyBaseOperator):
     """穿插物体"""
     bl_idname = "lowpoly.suggest_intersecting_objects"
-    bl_label = "穿插物体"
-    bl_description = "检测互相穿插的物体"
+    bl_label = "Suggest Intersecting Objects"
+    bl_description = "Detect objects that intersect each other"
 
     def execute(self, context):
         self.report({'INFO'}, _do_suggest_intersecting_objects(context))
@@ -273,8 +275,8 @@ class LOWPOLY_OT_select_intersecting_objects(bpy.types.Operator, LowPolyBaseOper
     """选择穿插物体"""
     bl_options = {'REGISTER', 'UNDO'}
     bl_idname = "lowpoly.select_intersecting_objects"
-    bl_label = "选择穿插物体"
-    bl_description = "选择已检测出的穿插物体"
+    bl_label = "Select Intersecting Objects"
+    bl_description = "Select the intersecting objects found by the check"
 
     def execute(self, context):
         return self._execute_sub_element_select(context, optimize_results, 'intersecting_objects', 'OBJECT', '穿插物体')
@@ -283,8 +285,8 @@ class LOWPOLY_OT_select_intersecting_objects(bpy.types.Operator, LowPolyBaseOper
 class LOWPOLY_OT_suggest_non_uniform_scale(bpy.types.Operator, LowPolyBaseOperator):
     """非均匀缩放物体"""
     bl_idname = "lowpoly.suggest_non_uniform_scale"
-    bl_label = "非均匀缩放物体"
-    bl_description = "检测缩放值不统一的物体"
+    bl_label = "Suggest Non-uniform Scale"
+    bl_description = "Detect objects with non-uniform scaling"
 
     def execute(self, context):
         self.report({'INFO'}, _do_suggest_non_uniform_scale(context))
@@ -295,8 +297,8 @@ class LOWPOLY_OT_select_non_uniform_scale(bpy.types.Operator, LowPolyBaseOperato
     """选择非均匀缩放物体"""
     bl_options = {'REGISTER', 'UNDO'}
     bl_idname = "lowpoly.select_non_uniform_scale"
-    bl_label = "选择非均匀缩放物体"
-    bl_description = "选择已检测出的非均匀缩放物体"
+    bl_label = "Select Non-uniform Scale"
+    bl_description = "Select the non-uniform scale objects found by the check"
 
     def execute(self, context):
         return self._execute_sub_element_select(context, optimize_results, 'non_uniform_scale', 'OBJECT', '非均匀缩放物体')
@@ -305,15 +307,15 @@ class LOWPOLY_OT_select_non_uniform_scale(bpy.types.Operator, LowPolyBaseOperato
 class LOWPOLY_OT_run_all_optimization_checks(bpy.types.Operator, LowPolyBaseOperator):
     """运行全部优化检查"""
     bl_idname = "lowpoly.run_all_optimization_checks"
-    bl_label = "运行全部优化检查"
-    bl_description = "运行所有优化检查并更新计数"
+    bl_label = "Run All Optimization Checks"
+    bl_description = "Run all optimization checks and update counts"
 
     def execute(self, context):
         optimize_results.clear()
 
         objects = utils.get_target_mesh_objects(context)
         if not objects:
-            self.report({'WARNING'}, "没有可检测的网格物体（请检查可见性或「仅处理选中物体」选项）")
+            self.report({'WARNING'}, i18n.translate("No mesh objects to check (check visibility or the \"only selected objects\" option)"))
             return {'CANCELLED'}
 
         total_verts = sum(len(obj.data.vertices) for obj in objects)
@@ -325,7 +327,7 @@ class LOWPOLY_OT_run_all_optimization_checks(bpy.types.Operator, LowPolyBaseOper
 
         failed = run_pipeline(context, get_optimize_pipeline(), report=self.report)
         if not failed:
-            self.report({'INFO'}, f"所有优化检查已完成（共 {len(objects)} 个物体）")
+            self.report({'INFO'}, i18n.translate("All optimization checks completed ({count} objects)").format(count=len(objects)))
         return {'FINISHED'}
 
 
