@@ -12,8 +12,8 @@ from ..properties import ALL_DEFAULTS
 class LOWPOLY_OT_reset_param(bpy.types.Operator, LowPolyBaseOperator):
     """重置单个参数"""
     bl_idname = "lowpoly.reset_param"
-    bl_label = "重置参数"
-    bl_description = "重置指定参数为默认值"
+    bl_label = "Reset Parameter"
+    bl_description = "Reset the specified parameter to its default"
     bl_options = {'REGISTER', 'UNDO'}
 
     param_name: bpy.props.StringProperty(
@@ -46,8 +46,8 @@ class LOWPOLY_OT_reset_param(bpy.types.Operator, LowPolyBaseOperator):
 class LOWPOLY_OT_reset_all_params(bpy.types.Operator, LowPolyBaseOperator):
     """重置所有参数"""
     bl_idname = "lowpoly.reset_all_params"
-    bl_label = "重置所有参数"
-    bl_description = "重置所有检查/优化参数为默认值"
+    bl_label = "Reset All Parameters"
+    bl_description = "Reset all check and optimization parameters to defaults"
     bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):

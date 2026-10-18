@@ -56,6 +56,50 @@ def _own_properties():
     ]
 
 
+def _plugin_modules():
+    """插件自身的全部 ``.py`` 源文件（排除 tests / deliverables 等非发布内容）"""
+    import pathlib
+    skip = {'tests', 'deliverables', 'target', 'tools', '.git'}
+    root = pathlib.Path(PLUGIN_DIR)
+    return [
+        p for p in sorted(root.rglob('*.py'))
+        if not any(part in skip or part.startswith('.') for part in p.parts)
+    ]
+
+
+def _own_operator_classes():
+    """
+    返回本插件声明的全部**操作符类**。
+
+    直接从模块里取类，而不走 ``operators.register()``：
+
+    * ``bl_label`` / ``bl_description`` 是**类属性**，未注册时即可读取；
+    * 其他测试模块可能已经注册过这些类，再注册一次会抛
+      ``already registered``——测试顺序不保证，不能依赖外部注册状态。
+
+    这样即使运行器只加载本模块，遍历结果也完整。
+    """
+    from Blender_LowCheck.operators import (
+        check_operators,
+        optimize_operators,
+        reset_operators,
+    )
+
+    classes = []
+    for module in (check_operators, optimize_operators, reset_operators):
+        for name in dir(module):
+            obj = getattr(module, name)
+            if not isinstance(obj, type):
+                continue
+            if not (issubclass(obj, bpy.types.Operator)
+                    or issubclass(obj, bpy.types.Panel)):
+                continue
+            if getattr(obj, 'bl_idname', '') == '':
+                continue     # 抽象基类（LowPolyBaseOperator 等）
+            classes.append(obj)
+    return classes
+
+
 class TestTranslationCoverage(unittest.TestCase):
     """每个用户可见的源字符串都必须有 zh_CN 译文。"""
 
@@ -91,6 +135,129 @@ class TestTranslationCoverage(unittest.TestCase):
         templates = [spec.count_template for spec in registry.CHECKS]
         self.assertEqual(_missing(templates, "count_template"), [],
                          "以下数量文案模板缺少 zh_CN 译文")
+
+    def test_all_operator_labels_translated(self):
+        """
+        所有操作符的 ``bl_label``。
+
+        这条守卫是 phase 3 补上的：此前它缺失，导致 37 个操作符标签长期
+        停留在中文源串（英文界面下直接显示中文）。
+
+        ``bl_label`` 出现在 F3 搜索菜单与工具提示里，用户搜 "check ngon"
+        应当能命中——若源串是中文则完全搜不到。
+        """
+        labels = [cls.bl_label for cls in _own_operator_classes()]
+        self.assertEqual(_missing(labels, "bl_label"), [],
+                         "以下操作符标签缺少 zh_CN 译文")
+
+    def test_all_operator_descriptions_translated(self):
+        """所有操作符的 ``bl_description``（工具提示）"""
+        descs = [cls.bl_description for cls in _own_operator_classes()]
+        self.assertEqual(_missing(descs, "bl_description"), [],
+                         "以下操作符描述缺少 zh_CN 译文")
+
+    def test_operator_source_strings_are_ascii(self):
+        """
+        操作符的 ``bl_label`` / ``bl_description`` 必须是纯 ASCII。
+
+        i18n 的硬约束：源语言必须是英文（Blender 把 ``en_US`` 当源语言短路，
+        不查表）。若源串是中文，英文界面下就会显示中文——这一条守住的是
+        「不再回退到中文源串」。
+        """
+        offenders = []
+        for cls in _own_operator_classes():
+            for attr in ("bl_label", "bl_description"):
+                text = getattr(cls, attr, "")
+                if text and not text.isascii():
+                    offenders.append(f"{cls.__name__}.{attr} = {text!r}")
+        self.assertEqual(offenders, [],
+                         "以下操作符字符串不是 ASCII（源语言必须是英文）")
+
+    def test_all_runtime_messages_registered(self):
+        """
+        所有 ``i18n.translate("...")`` 的源串都必须已登记。
+
+        这条是 phase 3 补上的第二道守卫。运行时报文（``self.report(...)``）
+        不会经 Blender 查表，必须显式调 :func:`i18n.translate`；而漏登记的
+        后果是英文界面下**原样显示英文**——用户看不出问题，只有切到中文
+        才发现文案没翻译。用 AST 扫字面量，字符串拼接骗不过去。
+        """
+        import ast
+
+        missing = []
+        for path in _plugin_modules():
+            tree = ast.parse(path.read_text(encoding='utf-8'))
+            for node in ast.walk(tree):
+                if not isinstance(node, ast.Call):
+                    continue
+                func = node.func
+                if not ((isinstance(func, ast.Attribute) and func.attr == 'translate')
+                        or (isinstance(func, ast.Name) and func.id == 'translate')):
+                    continue
+                if not node.args:
+                    continue
+                arg = node.args[0]
+                if (isinstance(arg, ast.Constant)
+                        and isinstance(arg.value, str)
+                        and arg.value not in i18n.ZH_CN):
+                    missing.append(f"{path.name}: {arg.value!r}")
+        self.assertEqual(missing, [],
+                         "以下 translate() 源串缺少 zh_CN 译文")
+
+    def test_all_format_found_noun_keys_registered(self):
+        """
+        所有 ``format_found("<key>", ...)`` 的 key 都必须有 ``what.<key>`` 译文。
+
+        这条守卫的是 ``format_found`` 的**键前缀设计**。报文名词翻译的是
+        ``what.<noun_key>`` 而不是裸英文名词——因为裸名词（如
+        ``"N-gon Faces"``）与计数属性的 RNA name 完全相同，而
+        ``pgettext_iface`` 精确匹配、一个键只能有一个译文，曾导致报文里
+        出现「找到 5 个N-gon面**数**」（属性标签的译文漏了过来）。
+
+        ``format_found`` 的第一个参数是普通字符串字面量，所以能用 AST 精确
+        枚举调用点——新增检测项若忘了登记，这里直接失败。
+        """
+        import ast
+
+        missing = []
+        for path in _plugin_modules():
+            tree = ast.parse(path.read_text(encoding='utf-8'))
+            for node in ast.walk(tree):
+                if not (isinstance(node, ast.Call)
+                        and isinstance(node.func, ast.Name)
+                        and node.func.id == 'format_found'):
+                    continue
+                if not node.args:
+                    continue
+                arg = node.args[0]
+                if not (isinstance(arg, ast.Constant)
+                        and isinstance(arg.value, str)):
+                    continue
+                key = f"what.{arg.value}"
+                if key not in i18n.ZH_CN:
+                    missing.append(f"{path.name}: format_found({arg.value!r}) "
+                                   f"-> 缺少 {key!r}")
+        self.assertEqual(missing, [],
+                         "以下 format_found 的名词键缺少 zh_CN 译文")
+
+    def test_no_keys_differ_only_by_case(self):
+        """
+        翻译表中不得存在仅大小写不同的两个键。
+
+        ``pgettext_iface`` 是**区分大小写**的精确匹配，所以 ``"N-gon faces"``
+        与 ``"N-gon Faces"`` 技术上能共存——但那是维护陷阱：肉眼极难分辨，
+        改文案时极易改错一个。出现过一次（报文名词与属性标签只差大小写），
+        后来靠 ``what.`` 前缀彻底绕开，这条测试守住「不再引入同类陷阱」。
+        """
+        seen = {}
+        offenders = []
+        for key in i18n.ZH_CN:
+            lower = key.lower()
+            if lower in seen:
+                offenders.append(f"{seen[lower]!r} vs {key!r}")
+            seen[lower] = key
+        self.assertEqual(offenders, [],
+                         "以下键仅大小写不同，请改用可区分的措辞")
 
     def test_panel_label_and_category_translated(self):
         """

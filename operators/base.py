@@ -5,6 +5,7 @@
 
 import bpy
 
+from .. import i18n
 from .. import utils
 
 
@@ -27,21 +28,34 @@ def store_result(store, key, data, element_type):
         store.pop(key, None)
 
 
-def format_found(label, count):
+def format_found(noun_key, count):
     """
-    统一的「找到 N 个 X / 未找到 X」报告文案。
+    统一的「Found N X / No X found」报告文案。
 
     检测项分散在两个模块中，文案格式必须一致；集中到一处避免各写一份
     后逐渐漂移（历史上曾出现一处写「找到」另一处写「检测到」）。
 
+    i18n：报文名词**不直接翻译**，而是翻译 ``what.<noun_key>``。
+
+    为什么加 ``what.`` 前缀：早期的写法是 ``translate(label)``，而
+    label 用的英文名词（如 ``"N-gon Faces"``）与**计数属性的 RNA name**
+    完全相同——``pgettext_iface`` 做精确匹配，一个键只能有一个译文，
+    于是报文里出现「找到 5 个N-gon面**数**」（属性标签的译文漏了过来）。
+    加前缀后两套词汇物理隔离，不可能再撞。
+
     Args:
-        label: 检测项中文标签
+        noun_key: 检测项的键（与 ``registry.CHECKS`` 的 ``key`` 一致），
+            如 ``"ngon_faces"``；**不是**给人看的字符串
         count: 命中数量
 
     Returns:
-        str: 报告文案
+        str: 报告文案（已按当前语言翻译）
     """
-    return f"找到 {count} 个{label}" if count > 0 else f"未找到{label}"
+    what = i18n.translate(f"what.{noun_key}")
+    if count > 0:
+        return i18n.translate("Found {count} {what}").format(
+            count=count, what=what)
+    return i18n.translate("No {what} found").format(what=what)
 
 
 def store_object_result(store, key, objects):
@@ -117,9 +131,9 @@ def run_pipeline(context, pipeline, report=None):
 
     if report is not None:
         if failed:
-            report({'WARNING'}, f"完成，但以下检查项失败: {', '.join(failed)}")
+            report({'WARNING'}, i18n.translate("Done, but these checks failed: {names}").format(names=", ".join(failed)))
         else:
-            report({'INFO'}, "全部检查已完成")
+            report({'INFO'}, i18n.translate("All checks completed"))
     return failed
 
 
@@ -199,7 +213,7 @@ class LowPolyBaseOperator:
             return fn(context)
         except Exception as exc:  # noqa: BLE001 - 操作符边界必须兜底
             utils.log_exception("操作符执行失败", exc)
-            self.report({'ERROR'}, f"执行出错: {type(exc).__name__}: {exc}")
+            self.report({'ERROR'}, i18n.translate("Execution error: {type}: {msg}").format(type=type(exc).__name__, msg=exc))
             return {'CANCELLED'}
 
     def _execute_sub_element_select(self, context, results_dict, result_key, element_type, label):
@@ -218,7 +232,7 @@ class LowPolyBaseOperator:
         """
         result = results_dict.get(result_key)
         if not result:
-            self.report({'WARNING'}, "请先运行对应的检测")
+            self.report({'WARNING'}, i18n.translate("Please run the corresponding check first"))
             return {'CANCELLED'}
 
         actual_type = result.get('element_type', element_type)
@@ -228,7 +242,7 @@ class LowPolyBaseOperator:
             data = result.get('data') or {}
 
         if not data:
-            self.report({'WARNING'}, f"没有要选择的{label}")
+            self.report({'WARNING'}, i18n.translate("No {what} to select").format(what=i18n.translate(label)))
             return {'CANCELLED'}
 
         self.deselect_all(context)
@@ -238,7 +252,7 @@ class LowPolyBaseOperator:
             objects = [obj for obj in data if utils.is_object_alive(obj)]
             skipped = len(data) - len(objects)
             if not objects:
-                self.report({'WARNING'}, f"{label}所在的物体已被删除，请重新检测")
+                self.report({'WARNING'}, i18n.translate("The objects containing {what} have been deleted, please re-run the check").format(what=i18n.translate(label)))
                 return {'CANCELLED'}
 
             for obj in objects:
@@ -259,21 +273,21 @@ class LowPolyBaseOperator:
             }
             skipped = len(data) - len(alive)
             if not alive:
-                self.report({'WARNING'}, f"{label}所在的物体已被删除，请重新检测")
+                self.report({'WARNING'}, i18n.translate("The objects containing {what} have been deleted, please re-run the check").format(what=i18n.translate(label)))
                 return {'CANCELLED'}
 
             _, selected_total, _ = utils.apply_selection(context, alive, actual_type)
 
         if selected_total == 0:
-            self.report({'WARNING'}, f"没有可在视图中选中的{label}（索引可能已失效，建议重新检测）")
+            self.report({'WARNING'}, i18n.translate("No {what} can be selected in the view (indices may be stale, re-run the check)").format(what=i18n.translate(label)))
             return {'CANCELLED'}
 
         if actual_type == 'OBJECT':
-            message = f"已选择 {selected_total} 个物体（{label}）"
+            message = i18n.translate("Selected {count} objects ({what})").format(count=selected_total, what=i18n.translate(label))
         else:
-            message = f"已选中 {selected_total} 个{label}"
+            message = i18n.translate("Selected {count} {what}").format(count=selected_total, what=i18n.translate(label))
         if skipped:
-            message += f"，跳过 {skipped} 个已删除物体"
+            message += i18n.translate(", skipped {count} deleted objects").format(count=skipped)
         self.report({'INFO'}, message)
         return {'FINISHED'}
 
@@ -290,7 +304,7 @@ class LowPolyBaseOperator:
             if hasattr(props, count_name):
                 setattr(props, count_name, 0)
 
-        self.report({'INFO'}, "已清除所有检测结果")
+        self.report({'INFO'}, i18n.translate("All check results cleared"))
         return {'FINISHED'}
 
 
@@ -342,7 +356,7 @@ def install_error_guard(cls):
                 return original_fn(self, context)
             except Exception as exc:  # noqa: BLE001 - 操作符边界必须兜底
                 utils.log_exception(f"{cls_name} 执行失败", exc)
-                self.report({'ERROR'}, f"执行出错: {type(exc).__name__}: {exc}")
+                self.report({'ERROR'}, i18n.translate("Execution error: {type}: {msg}").format(type=type(exc).__name__, msg=exc))
                 return {'CANCELLED'}
         return execute
 
