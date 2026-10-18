@@ -31,6 +31,32 @@ if PARENT_DIR not in sys.path:
 import bpy  # noqa: E402  (必须在 sys.path 设置之后导入)
 
 
+# ── 版本号一致性 ────────────────────────────────────────────────────
+
+def _changelog_latest_version():
+    """
+    从 ``CHANGELOG.md`` 解析最新版本段，返回 ``(major, minor, patch)``。
+
+    版本号原本在此测试里硬编码。硬编码的问题是：每次发版都要记得改测试，
+    忘记改就报一个「版本号应为 1.0.0」的误导性失败——测试本该守住一致性，
+    反而变成第三处需要手工同步的地方。改为直接读 CHANGELOG，让「bl_info 版本
+    ↔ CHANGELOG 版本」这条约束由测试自动校验。
+
+    Returns:
+        tuple[int, int, int]: CHANGELOG 中第一个版本段的版本号
+    """
+    changelog = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        "CHANGELOG.md",
+    )
+    with open(changelog, encoding="utf-8") as fh:
+        text = fh.read()
+    match = re.search(r"^## \[(\d+)\.(\d+)\.(\d+)\]", text, re.M)
+    if match is None:
+        raise AssertionError(f"CHANGELOG.md 中找不到版本段标题：{changelog}")
+    return tuple(int(part) for part in match.groups())
+
+
 # ── 测试用缺陷网格 ───────────────────────────────────────────────────
 
 def _make_object(name, verts, faces, edges=None):
@@ -187,8 +213,11 @@ class TestAddonLifecycle(unittest.TestCase):
         self.assertTrue(info['description'])
         self.assertEqual(info['category'], 'Mesh')
         self.assertEqual(
-            tuple(info['version']), (1, 0, 0),
-            "版本号应为 1.0.0（与 README / CHANGELOG 一致）",
+            tuple(info['version']),
+            _changelog_latest_version(),
+            "bl_info.version 必须与 CHANGELOG.md 的最新版本段一致"
+            "（文档【九.2】：插件版本号必须与 git 标签一致，"
+            "而标签是照 CHANGELOG 打的）",
         )
 
     # ── 阶段 3：UI 图标有效性 ───────────────────────────────────
