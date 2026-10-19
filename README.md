@@ -5,7 +5,7 @@ Blender 低多边形模型质量检查与优化工具插件。
 | 项目 | 内容 |
 | --- | --- |
 | 作者 | StarAsh042 |
-| 当前版本 | **1.0.0** |
+| 当前版本 | **1.1.0** |
 | 最低 Blender 版本 | **3.4** |
 | 已验证版本 | Blender 3.4.1 / Python 3.10.8（Windows 64 位） |
 | 平台 | Windows / macOS / Linux |
@@ -92,11 +92,11 @@ Blender 低多边形模型质量检查与优化工具插件。
    ```bash
    # 使用 Blender 自带的 Python（无需额外安装 Python）
    "<Blender 可执行文件>" --background --python tools/build_addon.py
-   # 产物: dist/Blender_LowCheck-v1.0.0.zip
+   # 产物: dist/Blender_LowCheck-v1.1.0.zip
    ```
 
 2. 打开 Blender，进入 `编辑 > 首选项 > 插件`（`Edit > Preferences > Add-ons`）。
-3. 点击右上角 `安装...`（`Install...`），选择 `Blender_LowCheck-v1.0.0.zip`。
+3. 点击右上角 `安装...`（`Install...`），选择 `Blender_LowCheck-v1.1.0.zip`。
 4. 在插件列表中找到 **`低模质量检查 (Lowpoly Check)`**，勾选左侧复选框启用。
 
 ### 方式二：复制文件夹
@@ -475,6 +475,23 @@ python tools\build_addon.py
 ## 更新日志
 
 完整变更记录见 [CHANGELOG.md](CHANGELOG.md)。
+
+### 1.1.0 (2026-10-19)
+
+多语言界面 + Windows 卸载修复 + 内核数据通路优化：
+
+- **新增多语言界面**：随 Blender 界面语言在中/英间切换，覆盖属性、面板、
+  37 个操作符标签与描述、全部运行时报文。切换方式：
+  `编辑 > 首选项 > 界面 > 语言`，无需重启。
+- **修复 Windows 上无法卸载插件**：已加载的内核 `.pyd` 会锁住插件目录，
+  导致 `shutil.rmtree` 报 `PermissionError [WinError 5]`、插件永远卸不掉。
+  改为从插件目录外的缓存副本加载。
+- **修复升级后内核不更新**：副本新鲜度改用内容比对（原先的文件时间戳是
+  构建时间，升级后永不更新）。
+- **修复平面度共线判据是死代码**：`geometry.normal` 会归一化，原判据
+  几乎永不触发，近共线面拿到噪声主导的垃圾值。
+- **性能**：16 项检测合计 1999 → 1713 ms（省 14.3%），内核三项 -59%。
+- 测试从 82 项增至 141 项。
 
 ### 1.0.0 (2026-10-03)
 
