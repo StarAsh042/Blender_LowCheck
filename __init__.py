@@ -14,7 +14,7 @@ bl_info = {
     #: 时字典尚未注册）。因此这里必须使用英文——与 Blender 官方惯例一致。
     "name": "Lowpoly Check",
     "author": "StarAsh042",
-    "version": (1, 0, 0),
+    "version": (1, 1, 0),
     "blender": (3, 4, 0),
     "location": "View3D > Sidebar > Lowpoly Tools",
     "description": "Check low-poly model quality: mesh topology, vertex quality, "
